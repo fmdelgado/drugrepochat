@@ -45,7 +45,7 @@ class user_message:
                      <p style='margin:0;font-weight:bold;'>{self.name}</p>
                      <p style='margin:0;color={st.get_option("theme.textColor")}'>{text}</p>
                      </div>
-                     <img src='https://i.imgur.com/qxo27Eu.png' style='width:50px;height:50px;border-radius:50%;margin-left:10px;'>
+                     <img src='https://i.imgur.com/zDxXZKk.png' style='width:50px;height:50px;border-radius:50%;margin-left:10px;'>
                      </div>
         """
         self.container.write(message, unsafe_allow_html=True)

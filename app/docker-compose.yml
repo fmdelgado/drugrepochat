@@ -1,0 +1,10 @@
+version: '3.3'
+
+services:
+  app:
+    image: drugrepochat
+    container_name: drugrepochat
+    build: .
+
+volumes:
+  desmond2-eval-volume:

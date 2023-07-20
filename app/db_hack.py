@@ -1,8 +1,9 @@
 import streamlit as st
 import openai
-from db_chat import get_api_key, user_message, bot_message
+from db_chat import user_message, bot_message
 from my_pdf_lib import load_index_from_db, get_index_for_pdf, store_index_in_db
 import json
+import os
 
 
 def get_json(filename):
@@ -22,17 +23,21 @@ def store_api_key(api_key):
 
 
 def chat_page():
-    openai.api_key = get_api_key()
+    api_key = st.text_input("Please enter your OpenAI API key", type="password")
+    openai.api_key = api_key
 
-    st.title("Chat your PDFs")
+    st.title("Drug Repurposing Chatbot 💊")
     st.write(
-        """This template allows you to add PDFs to a knowledge base (vectordb) and chat with it. 
-                To insert your PDFs, go to the *Configure Knowledge Base* page."""
+        """👩‍🔬 This chatbot is your expert assistant in the field of drug repurposing. 
+           Leveraging a knowledge base derived from a variety of scientific documents related to drug repurposing, 
+           it can provide detailed insights and answers to your queries! 📚
+           To customize the knowledge base, please navigate to the *Configure Knowledge Base* page."""
     )
 
     try:
         config = get_json("config.json")
         index_name = config["index"]
+
     except:
         st.info("No knowledge base found. Please configure one!")
         st.stop()
@@ -42,13 +47,13 @@ def chat_page():
     prompt = st.session_state.get("prompt", None)
     if prompt is None:
         prompt = [{"role": "system", "content": 'You are a helpful assistant.'}]
-        bot_message("Hi there, how can I help?", bot_name="pdfGPT")
+        bot_message("Hi there, how can I help?", bot_name="drGPT")
 
     for message in prompt:
         if message["role"] == "user":
             user_message(message["content"])
         elif message["role"] == "assistant":
-            bot_message(message["content"], bot_name="pdfGPT")
+            bot_message(message["content"], bot_name="drGPT")
 
     messages_container = st.container()
     question = st.text_input(
@@ -82,7 +87,7 @@ def chat_page():
         result = ""
         if openai.api_key:
             for chunk in openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo", messages=prompt, stream=True
+                    model="gpt-3.5-turbo", messages=prompt, temperature=0, stream=True
             ):
                 text = chunk.choices[0].get("delta", {}).get("content")
                 if text is not None:
@@ -100,16 +105,12 @@ def chat_page():
             Please provide a key in the box below so we can start chatting:
             """
             )
-            api_key = st.text_input("Please type inn your API key", type="password")
-            if api_key:
-                store_api_key(api_key)
-                st.experimental_rerun()
 
         st.session_state["prompt"] = prompt
 
 
 def config_page():
-    openai_api_key = "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"
+    openai_api_key = st.text_input("Please enter your OpenAI API key", type="password")
 
     st.title("Configure knowledge base")
 
@@ -122,6 +123,9 @@ def config_page():
 
     dip = indices + ["Create New"]
     select_index = st.selectbox("Select knowledge base", options=dip)
+
+    # List of protected index names
+    protected_indices = ["repo4euD21"]
 
     if select_index == "Create New":
         with st.form(key="index"):
@@ -150,8 +154,20 @@ def config_page():
         store_data_as_json("config.json", config)
 
         if delete:
-            indices.remove(select_index)
-            store_data_as_json("index-list.json", indices)
+            # Only delete the files if the index is not protected
+            if select_index not in protected_indices:
+                # Delete the files
+                pkl_file = f"{select_index}.pkl"
+                index_file = f"{select_index}.index"
+                if os.path.exists(pkl_file):
+                    os.remove(pkl_file)
+                if os.path.exists(index_file):
+                    os.remove(index_file)
+
+                indices.remove(select_index)
+                store_data_as_json("index-list.json", indices)
+            else:
+                st.warning("Database is protected and cannot be deleted.")
             st.experimental_rerun()
 
 
