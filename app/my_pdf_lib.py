@@ -80,7 +80,6 @@ def docs_to_index(docs, openai_api_key):
 
     return index
 
-
 def get_index_for_pdf(pdf_files, openai_api_key):
     documents = []
     for pdf_file in pdf_files:
