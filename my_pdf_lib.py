@@ -96,7 +96,7 @@ def get_index_for_pdf(pdf_files, openai_api_key):
 def store_index_in_db(index, name):
     faiss.write_index(index.index, "docs.index")
     # Open the file and dump to local storage
-    write_file(f"{name}.index", read_file("docs.index"))
+    write_file(f"{name}.index", read_file("app/docs.index"))
     index.index = None
     write_file(f"{name}.pkl", pickle.dumps(index))
 
@@ -104,7 +104,7 @@ def store_index_in_db(index, name):
 def load_index_from_db(index_name):
     findex = read_file(f"{index_name}.index")
 
-    write_file("docs.index", findex)
+    write_file("app/docs.index", findex)
     index = faiss.read_index("docs.index")
     VectorDB = pickle.loads(read_file(f"{index_name}.pkl"))
     VectorDB.index = index
