@@ -18,4 +18,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 EXPOSE 8501
 
 # Run app.py when the container launches
-CMD streamlit run db_hack.py --browser.serverAddress apps.cosy.bio --server.enableCORS=false --server.enableXsrfProtection=false --server.enableWebsocketCompression=false
+CMD streamlit run db_hack.py --server.address 0.0.0.0 --server.enableCORS=false --server.enableXsrfProtection=false --server.enableWebsocketCompression=false
