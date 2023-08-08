@@ -2,18 +2,18 @@ import pandas as pd
 import streamlit as st
 
 
-def get_api_key():
+def check_for_openai_key():
     try:
         with open('api_key.txt', 'r') as file:
             key = file.read().strip()
-    except FileNotFoundError:
-        return None
+    except Exception:
+        return False
 
     if len(key) > 10:
         return key
 
     st.info(
-        """This example requires an OpenAI API key to run. Your key will be stored in a file named 'api_key.txt'.
+        """This example requires an OpenAI API key to run. Your key will be stored temporarily.
     """
     )
     key = st.text_input(
@@ -25,7 +25,7 @@ def get_api_key():
         st.experimental_rerun()
 
     st.stop()
-    return None
+    return 1
 
 
 def load_dataframe(name):

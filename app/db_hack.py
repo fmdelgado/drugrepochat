@@ -1,6 +1,6 @@
 import streamlit as st
 import openai
-from db_chat import user_message, bot_message
+from db_chat import user_message, bot_message, check_for_openai_key
 from my_pdf_lib import load_index_from_db, get_index_for_pdf, store_index_in_db
 import json
 import os
@@ -22,10 +22,23 @@ def store_api_key(api_key):
         file.write(api_key)
 
 
+def get_openai_models():
+    models = openai.Model.list()
+    dict_list = [elem for elem in models.data if elem["object"] == "model"]
+    contains_gpt_4 = any(d['id'] == "gpt-4" for d in dict_list)
+    if contains_gpt_4:
+        available_models = ["gpt-3.5-turbo", 'gpt-4']
+    else:
+        available_models = ["gpt-3.5-turbo"]
+    return available_models
+
+
 def chat_page():
-    api_key = st.text_input("Please enter your OpenAI API key", type="password")
+    api_key = check_for_openai_key()
     openai.api_key = api_key
 
+    available_models = get_openai_models()
+    selected_model = st.selectbox("Please select a model", options=available_models)
     st.title("Drug Repurposing Chatbot 💊")
     st.write(
         """👩‍🔬 This chatbot is your expert assistant in the field of drug repurposing. 
@@ -43,8 +56,8 @@ def chat_page():
         st.stop()
 
     index = load_index_from_db(index_name)
-
     prompt = st.session_state.get("prompt", None)
+
     if prompt is None:
         prompt = [{"role": "system", "content": 'You are a helpful assistant.'}]
         bot_message("Hi there, how can I help?", bot_name="drGPT")
@@ -110,7 +123,8 @@ def chat_page():
 
 
 def config_page():
-    openai_api_key = st.text_input("Please enter your OpenAI API key", type="password")
+    openai_api_key = check_for_openai_key()
+    openai.api_key = openai_api_key
 
     st.title("Configure knowledge base")
 
