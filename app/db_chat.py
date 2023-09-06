@@ -60,7 +60,7 @@ class bot_message:
 
     def update(self, text):
         message = f"""<div style='display:flex;align-items:center;margin-bottom:10px;'>
-                    <img src='https://i.imgur.com/rKTnxVN.png' style='width:50px;height:50px;border-radius:50%;margin-right:10px;'>
+                    <img src='https://github.com/fmdelgado/DRACOONpy/raw/master/img/academate_logo.png' style='width:50px;height:50px;border-radius:50%;margin-right:10px;'>
                     <div style='background-color:st.get_option("theme.backgroundColor");border: 1px solid {st.get_option("theme.secondaryBackgroundColor")};border-radius:10px;padding:10px;'>
                     <p style='margin:0;font-weight:bold;'>{self.name}</p>
                     <p style='margin:0;color={st.get_option("theme.textColor")}'>{text}</p>
