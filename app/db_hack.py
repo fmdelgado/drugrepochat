@@ -1,3 +1,5 @@
+import time
+
 import streamlit as st
 import openai
 import sys
@@ -14,7 +16,6 @@ from langchain.chat_models import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain.prompts import PromptTemplate, ChatPromptTemplate, HumanMessagePromptTemplate
 import markdown
-
 
 def get_json(filename):
     with open(filename, 'r') as f:
@@ -44,11 +45,11 @@ def get_openai_models():
 
 
 def chat_page():
-    api_key = check_for_openai_key()
-    openai.api_key = api_key
+    #api_key = check_for_openai_key()
+    #openai.api_key = api_key
 
-    available_models = get_openai_models()
-    selected_model = st.selectbox("Please select a model", options=available_models)
+    #available_models = get_openai_models()
+    #selected_model = st.selectbox("Please select a model", options=available_models)
     st.title("Academate")
     st.header("Questions and  Answering Chatbot")
     st.write(
@@ -71,6 +72,7 @@ def chat_page():
         st.stop()
 
     index = load_index_from_db(index_name)
+
     prompt = st.session_state.get("prompt", None)
 
     if prompt is None:
@@ -113,7 +115,8 @@ def chat_page():
 
         response = []
         result = ""
-        if openai.api_key:
+        #if openai.api_key:
+        if False:
             for chunk in openai.ChatCompletion.create(
                     model=selected_model, messages=prompt, temperature=0, stream=True
             ):
@@ -136,6 +139,99 @@ def chat_page():
 
         st.session_state["prompt"] = prompt
 
+
+def chat_page2():
+    st.session_state.key = st.text_input(
+        "Please, type in your OpenAI API key to continue", type="password", help="at least 10 characters required"
+    )
+    if len(st.session_state.key) > 10:
+        openai.api_key = st.session_state.key
+    else:
+        st.warning("At least 10 characters are required!")
+        st.stop()
+
+    try:
+        available_models = get_openai_models()
+    except:
+        st.error("Your provided OpenAI API key is not valid.")
+        available_models = []
+        #st.stop()
+    selected_model = st.selectbox("Please select a model", options=available_models)
+    st.title("Academate")
+    st.header("Questions and  Answering Chatbot")
+    st.write(
+        """
+        This chatbot is your expert assistant in the field of drug repurposing. 
+           Leveraging a knowledge base derived from a variety of scientific documents related to your topic of choice,
+           it can provide detailed insights and answers to your queries! 📚
+
+           To customize the knowledge base, please navigate to the *Configure Knowledge Base* page.
+
+            """
+    )
+
+    try:
+        config = get_json("config.json")
+        index_name = config["index"]
+
+    except:
+        st.info("No knowledge base found. Please configure one!")
+        st.stop()
+
+    index = load_index_from_db(index_name)
+
+    if "messages" not in st.session_state.keys() or len(st.session_state.messages)==0:
+        st.session_state.messages = [{"role": "assistant", "content": "Hi there, how can I help?"}]
+
+    for message in st.session_state.messages:
+        if message["role"] == "user":
+            user_message(message["content"])
+        elif message["role"] == "assistant":
+            bot_message(message["content"], bot_name="Academate")
+
+    if prompt := st.chat_input():
+        st.session_state.messages.append({"role": "user", "content": prompt})
+
+    if prompt:
+        # rest of the function...
+        #WHY?
+        #docs = index.similarity_search(st.session_state.dummy_text)
+        #doc = docs[0].page_content
+
+        #prompt_template = 'The given information is: {document_data}'
+        #prompt_template = prompt_template.format(document_data=doc)
+        #prompt[0] = {"role": "system", "content": prompt_template}
+
+        with st.container():
+            user_message(prompt)
+            botmsg = bot_message("...", bot_name="Academate")
+
+        response = []
+        result = ""
+        if openai.api_key and len(available_models)>0:
+            for chunk in openai.ChatCompletion.create(
+                    model=selected_model, messages=prompt, temperature=0, stream=True
+            ):
+                text = chunk.choices[0].get("delta", {}).get("content")
+                if text is not None:
+                    response.append(text)
+                    result = "".join(response).strip()
+
+                    botmsg.update(result)
+
+            st.session_state.messages.append({"role": "assistant", "content": result})
+
+        else:
+            failure_message = """
+            Hi there. You haven't provided me with an OpenAI API key that I can use. 
+            Please provide a key, so we can start chatting!
+            """
+            st.session_state.messages.append({"role": "assistant", "content": failure_message})
+            botmsg.update(failure_message)
+        # Add clear chat button
+    if len(st.session_state.messages)!=0 and st.button("Clear Chat"):
+        st.session_state.messages = []
+        st.experimental_rerun()
 
 def config_page():
     openai_api_key = check_for_openai_key()
@@ -196,7 +292,9 @@ def config_page():
                 indices.remove(select_index)
                 store_data_as_json("index-list.json", indices)
             else:
+                #cannot be seen because of the rerun -> time sleep for one second
                 st.warning("Database is protected and cannot be deleted.")
+                time.sleep(1)
             st.experimental_rerun()
 
 
@@ -377,7 +475,7 @@ def main():
     )
 
     if page == "Chatbot":
-        chat_page()
+        chat_page2()
     elif page == "Configure knowledge base":
         config_page()
     elif page == "Q&A":
@@ -386,7 +484,6 @@ def main():
         visualize_index_page()
     elif page == "About":
         about_page()
-
 
 
 if __name__ == "__main__":
