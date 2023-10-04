@@ -2,32 +2,6 @@ import pandas as pd
 import streamlit as st
 
 
-def check_for_openai_key():
-    try:
-        with open('api_key.txt', 'r') as file:
-            key = file.read().strip()
-    except Exception:
-        return False
-
-    if len(key) > 10:
-        return key
-
-    st.info(
-        """This example requires an OpenAI API key to run. Your key will be stored temporarily.
-    """
-    )
-    key = st.text_input(
-        "Please, type in you OpenAI API key to continue", type="password"
-    )
-    if key:
-        with open('api_key.txt', 'w') as file:
-            file.write(key)
-        st.experimental_rerun()
-
-    st.stop()
-    return 1
-
-
 def load_dataframe(name):
     df = pd.read_csv(name + '.csv')
     return df
