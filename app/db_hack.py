@@ -6,7 +6,7 @@ import sys
 
 sys.path.append('/Users/fernando/Documents/Research/drugrepochat/app')
 from db_management import *
-from db_chat import user_message, bot_message, check_for_openai_key
+from db_chat import user_message, bot_message
 from my_pdf_lib import load_index_from_db, get_index_for_pdf, store_index_in_db
 import json
 import os
@@ -51,7 +51,7 @@ def get_openai_models():
 
 def chat_page():
     # when no user logged in: application can be used by only giving an API key
-    if not st.session_state["key"]:
+    if "key" not in st.session_state.keys():
         st.session_state["key"] = st.text_input(
             "Please, type in your OpenAI API key to continue", type="password", help="at least 10 characters required"
         )
@@ -170,8 +170,20 @@ def chat_page():
 
 
 def config_page():
-    openai_api_key = check_for_openai_key()
-    openai.api_key = openai_api_key
+    # when no user logged in: application can be used by only giving an API key
+    if "key" not in st.session_state.keys():
+        st.session_state["key"] = st.text_input(
+            "Please, type in your OpenAI API key to continue", type="password", help="at least 10 characters required"
+        )
+        if len(st.session_state.key) > 10:
+            openai.api_key = st.session_state.key
+        else:
+            st.warning("At least 10 characters are required!")
+            st.stop()
+    try:
+        get_openai_models()
+    except:
+        st.error("Your provided OpenAI API key is not valid.")
 
     st.title("Configure knowledge base")
 
@@ -200,7 +212,7 @@ def config_page():
 
             if button:
                 with st.spinner("Indexing"):
-                    index = get_index_for_pdf(files, openai_api_key=openai_api_key)
+                    index = get_index_for_pdf(files, openai_api_key=st.session_state["key"])
                     index_name = "index_" + name
                     store_index_in_db(index, name=index_name)
                     indices = indices + [index_name]
@@ -248,7 +260,7 @@ def process_llm_response(llm_response, doc_content=True):
 
 def qanda_page():
     # when no user logged in: application can be used by only giving an API key
-    if not st.session_state["key"]:
+    if "key" not in st.session_state.keys():
         st.session_state["key"] = st.text_input(
             "Please, type in your OpenAI API key to continue", type="password", help="at least 10 characters required"
         )
