@@ -1,6 +1,6 @@
 import sqlite3
 
-conn = sqlite3.connect('data.db')
+conn = sqlite3.connect('data.db', check_same_thread=False)
 c = conn.cursor()
 def create_usertable():
     c.execute('CREATE TABLE IF NOT EXISTS userstable(username TEXT,password TEXT, key TEXT)')
@@ -46,6 +46,10 @@ def update_key(key, user):
     c.execute('UPDATE userstable SET key =? WHERE username =?', (key, user))
     conn.commit()
 
+def get_user_data(username):
+    c.execute('SELECT * FROM userstable WHERE username =?', [username])
+    data = c.fetchall()
+    return data
 
 def check_if_user_already_exists(username):
     c.execute('SELECT * FROM userstable WHERE username =?', [username])

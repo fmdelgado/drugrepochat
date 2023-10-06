@@ -4,6 +4,8 @@ import streamlit as st
 import openai
 import sys
 
+import extra_streamlit_components as stx
+
 sys.path.append('/Users/fernando/Documents/Research/drugrepochat/app')
 from db_management import *
 from db_chat import user_message, bot_message
@@ -16,15 +18,14 @@ from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
 import markdown
 import hashlib
 
+@st.cache_resource(experimental_allow_widgets=True)
+def get_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_manager()
 
 def make_hashes(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
-
-
-def check_hashes(password, hashed_text):
-    if make_hashes(password) == hashed_text:
-        return hashed_text
-    return False
 
 
 def get_json(filename):
@@ -211,14 +212,17 @@ def config_page():
             button = st.form_submit_button("Create Index")
 
             if button:
-                with st.spinner("Indexing"):
-                    index = get_index_for_pdf(files, openai_api_key=st.session_state["key"])
-                    index_name = "index_" + name
-                    store_index_in_db(index, name=index_name)
-                    indices = indices + [index_name]
-                    store_data_as_json("index-list.json", indices)
-                st.success("Finished creating new index")
-                st.experimental_rerun()
+                try:
+                    with st.spinner("Indexing"):
+                        index = get_index_for_pdf(files, openai_api_key=st.session_state["key"])
+                        index_name = "index_" + name
+                        store_index_in_db(index, name=index_name)
+                        indices = indices + [index_name]
+                        store_data_as_json("index-list.json", indices)
+                    st.success("Finished creating new index")
+                    st.experimental_rerun()
+                except:
+                    st.error("Could not create new index. Check your OpenAI API key.")
     else:
         delete = st.button("Delete")
 
@@ -442,7 +446,7 @@ def about_page():
 def sign_up():
     st.subheader("Create an Account")
     st.session_state["user"] = st.text_input('Username')
-    st.session_state["password"] = st.text_input('Password', type='password')
+    st.session_state["password"] = make_hashes(st.text_input('Password', type='password'))
     st.session_state["key"] = st.text_input(
         "Please, type in your OpenAI API key to continue", type="password", help="at least 10 characters required"
     )
@@ -453,11 +457,12 @@ def sign_up():
         st.stop()
     # signup possible if api key at least 10 characters long
     if st.button('SignUp'):
-        create_usertable()
         # user does not exist yet and can be created
         if check_if_user_already_exists(st.session_state["user"]):
-            add_userdata(st.session_state["user"], make_hashes(st.session_state["password"]), st.session_state["key"])
-            st.success("You have successfully created an account.")
+            add_userdata(st.session_state["user"], st.session_state["password"], st.session_state["key"])
+            st.success("You have successfully created an account. Please log in.")
+            time.sleep(2)
+            logout()
         # user already exists
         else:
             st.error("The user already exists. Please create a new user or login.")
@@ -465,23 +470,23 @@ def sign_up():
 
 def login():
     st.subheader("Login")
-    if "user" not in st.session_state.keys() or len(st.session_state["user"]) == 0 or len(
-            st.session_state["password"]) == 0 or len(st.session_state["key"]) == 0:
+    user = cookie_manager.get(cookie="user")
+    if user and len(user) > 0:
+        st.session_state["user"] = user
+        data = get_user_data(user)
+        st.session_state["password"] = data[0][1]
+        st.session_state["key"] = data[0][2]
+    if len(st.session_state["user"]) == 0 or len(st.session_state["password"]) == 0 or len(st.session_state["key"]) == 0:
         # new login
         with st.form("login"):
-            user = st.text_input('Username')
-            password = st.text_input('Password', type='password')
+            st.session_state["user"] = st.text_input('Username')
+            st.session_state["password"] = make_hashes(st.text_input('Password', type='password'))
             st.form_submit_button("login")
-        st.session_state["user"] = user
-        st.session_state["password"] = password
-    create_usertable()
-    create_chattable()
-    create_qandatable()
-    hashed_pswd = make_hashes(st.session_state["password"])
-    result = login_user(st.session_state["user"], check_hashes(st.session_state["password"], hashed_pswd))
+    result = login_user(st.session_state["user"], st.session_state["password"])
     # user could be logged in
     if result:
         st.success("Logged In as {}".format(st.session_state["user"]))
+        cookie_manager.set("user", st.session_state["user"])  # Expires in a day by default
         st.session_state["key"] = result[0][2]
         # change OpenAI API key
         if st.checkbox("change provided OpenAI API key"):
@@ -504,13 +509,25 @@ def login():
 
 
 def logout():
+    cookie_manager.delete("user")
+    cookies = cookie_manager.get_all()
     st.session_state["user"] = ""
     st.session_state["password"] = ""
     st.session_state["key"] = ""
     st.session_state["messages"] = []
 
-
 def main():
+    st.session_state["user"] = ""
+    st.session_state["password"] = ""
+    st.session_state["key"] = ""
+    st.session_state["messages"] = []
+    st.session_state["messagesqanda"] = []
+
+    create_usertable()
+    create_chattable()
+    create_qandatable()
+
+
     page = st.sidebar.selectbox(
         "Choose a page",
         ["Login", "Sign up", "Chatbot", "Configure knowledge base", "Q&A", "About"],
@@ -518,7 +535,6 @@ def main():
     with st.sidebar:
         if st.button("logout"):
             logout()
-
     if page == "Chatbot":
         chat_page()
     elif page == "Configure knowledge base":
