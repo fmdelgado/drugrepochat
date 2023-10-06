@@ -11,7 +11,6 @@ from PIL import Image
 from io import BytesIO
 from langchain.chains import RetrievalQA
 from langchain.chat_models import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
 from langchain.prompts import PromptTemplate, ChatPromptTemplate, HumanMessagePromptTemplate
 import markdown
 
