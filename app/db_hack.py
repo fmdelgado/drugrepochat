@@ -55,7 +55,7 @@ def get_openai_models():
 
 def chat_page():
     # when no user logged in: application can be used by only giving an API key
-    if "key" not in st.session_state.keys():
+    if "key" not in st.session_state.keys() or len(st.session_state["key"]) == 0:
         st.session_state["key"] = st.text_input(
             "Please, type in your OpenAI API key to continue", type="password", help="at least 10 characters required"
         )
@@ -97,7 +97,7 @@ def chat_page():
     # start a new chat
 
     # reproduce chat if user is logged in from DB
-    if "user" in st.session_state.keys():
+    if "user" in st.session_state.keys() and len(st.session_state["user"]) > 0:
         messages = get_chatdata(st.session_state["user"])
         st.session_state["messages"] = []
         for message in messages:
@@ -124,7 +124,6 @@ def chat_page():
 
     # produce response
     if prompt:
-        # rest of the function...
         # WHY?
         # docs = index.similarity_search(prompt)
         # doc = docs[0].page_content
@@ -268,7 +267,7 @@ def process_llm_response(llm_response, doc_content=True):
 
 def qanda_page():
     # when no user logged in: application can be used by only giving an API key
-    if "key" not in st.session_state.keys():
+    if "key" not in st.session_state.keys() or len(st.session_state["key"]) == 0:
         st.session_state["key"] = st.text_input(
             "Please, type in your OpenAI API key to continue", type="password", help="at least 10 characters required"
         )
@@ -306,7 +305,7 @@ def qanda_page():
     index = load_index_from_db(index_name)
 
     # reproduce chat if user is logged in from DB
-    if "user" in st.session_state.keys():
+    if "user" in st.session_state.keys() and len(st.session_state["user"]) > 0:
         messages = get_qandadata(st.session_state["user"])
         st.session_state["messagesqanda"] = []
         for message in messages:
@@ -522,15 +521,16 @@ def logout():
 
 
 def main():
-    st.session_state["user"] = ""
-    st.session_state["password"] = ""
-    st.session_state["key"] = ""
-    st.session_state["messages"] = []
-    st.session_state["messagesqanda"] = []
+    if "messages" not in st.session_state.keys() and "messagesqanda" not in st.session_state.keys():
+        st.session_state["user"] = ""
+        st.session_state["password"] = ""
+        st.session_state["key"] = ""
+        st.session_state["messages"] = []
+        st.session_state["messagesqanda"] = []
 
-    create_usertable()
-    create_chattable()
-    create_qandatable()
+        create_usertable()
+        create_chattable()
+        create_qandatable()
 
     page = st.sidebar.selectbox(
         "Choose a page",
