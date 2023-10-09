@@ -5,11 +5,11 @@ import openai
 import sys
 
 import extra_streamlit_components as stx
+from my_pdf_lib import load_index_from_db, store_index_in_db, get_index_for_pdf
 
 sys.path.append('/Users/fernando/Documents/Research/drugrepochat/app')
 from db_management import *
 from db_chat import user_message, bot_message
-from my_pdf_lib import load_index_from_db, get_index_for_pdf, store_index_in_db
 import json
 import os
 from langchain.chains import RetrievalQA
@@ -84,15 +84,16 @@ def chat_page():
             """
     )
 
-    try:
-        config = get_json("config.json")
-        index_name = config["index"]
+    #try:
+        #TODO hier konfiguration welche knowledge base genutzt wird
+        #config = get_json("config.json")
+        #index_name = config["index"]
 
-    except:
-        st.info("No knowledge base found. Please configure one!")
-        st.stop()
+    #except:
+        #st.info("No knowledge base found. Please configure one!")
+        #st.stop()
+    index = load_index_from_db(st.session_state["knowledgebase"])
 
-    index = load_index_from_db(index_name)
 
     # start a new chat
 
@@ -124,13 +125,14 @@ def chat_page():
 
     # produce response
     if prompt:
-        # WHY?
-        # docs = index.similarity_search(prompt)
-        # doc = docs[0].page_content
+        # WHY? Throws error currently: KeyError: 3375
+        #docs = index.similarity_search(prompt)
+        #doc = docs[0].page_content
 
-        # prompt_template = 'The given information is: {document_data}'
-        # prompt_template = prompt_template.format(document_data=doc)
-        # prompt[0] = {"role": "system", "content": prompt_template}
+        #prompt_template = 'The given information is: {document_data}'
+        #prompt_template = prompt_template.format(document_data=doc)
+        #message = {"role": "system", "content": prompt_template}
+        #print(message)
 
         with st.container():
             user_message(prompt)
@@ -175,7 +177,7 @@ def chat_page():
 
 def config_page():
     # when no user logged in: application can be used by only giving an API key
-    if "key" not in st.session_state.keys():
+    if "key" not in st.session_state.keys() or len(st.session_state["key"]) == 0:
         st.session_state["key"] = st.text_input(
             "Please, type in your OpenAI API key to continue", type="password", help="at least 10 characters required"
         )
@@ -192,19 +194,25 @@ def config_page():
     st.title("Configure knowledge base")
 
     try:
-        indices = get_json("index-list.json")
-        if indices == None:
-            indices = []
-    except:
+        indices = []
+        indices_unfiltered = get_json("index-list.json")
+        for index in indices_unfiltered:
+            if index.startswith("index_") or index == "repo4euD21":
+                indices.append(index)
+        if "user" in st.session_state.keys() and len(st.session_state["user"])>0:
+            data = get_knowledgebases_per_user(st.session_state["user"])
+            for base in data:
+                indices.append(st.session_state["user"]+"_"+base[1])
+    except Exception as e:
         indices = []
 
     dip = indices + ["Create New"]
-    select_index = st.selectbox("Select knowledge base", options=dip)
+    st.session_state["knowledgebase"] = st.selectbox("Select knowledge base", options=dip)
 
     # List of protected index names
     protected_indices = ["repo4euD21"]
 
-    if select_index == "Create New":
+    if st.session_state["knowledgebase"] == "Create New":
         with st.form(key="index"):
             st.write("##### Create a new knowledge base")
             files = st.file_uploader(
@@ -212,42 +220,58 @@ def config_page():
             )
 
             name = st.text_input("Step 2 - Choose a name for your index")
+            index_name = "index_"+name
+            user_name = "user_"+name
             button = st.form_submit_button("Create Index")
-
+            if index_name in indices or user_name in indices:
+                st.warning("Please use an unique name!")
+                st.stop()
             if button:
                 try:
                     with st.spinner("Indexing"):
                         index = get_index_for_pdf(files, openai_api_key=st.session_state["key"])
-                        index_name = "index_" + name
-                        store_index_in_db(index, name=index_name)
-                        indices = indices + [index_name]
-                        store_data_as_json("index-list.json", indices)
+                        if "user" in st.session_state.keys() and len(st.session_state["user"]) > 0:
+                            user_index = st.session_state["user"] + "_" + name
+                            store_index_in_db(index, name=user_index)
+                            indices = indices + [user_index]
+                            store_data_as_json("index-list.json", indices)
+                            add_knowledgebase(st.session_state["user"], name)
+                        else:
+                            index_name = "index_" + name
+                            store_index_in_db(index, name=index_name)
+                            indices = indices + [index_name]
+                            store_data_as_json("index-list.json", indices)
                     st.success("Finished creating new index")
+                    time.sleep(1)
                     st.experimental_rerun()
-                except:
+                except Exception as e:
                     st.error("Could not create new index. Check your OpenAI API key.")
     else:
         delete = st.button("Delete")
 
         config = {}
-        config["index"] = select_index
+        config["index"] = st.session_state["knowledgebase"]
         store_data_as_json("config.json", config)
 
         if delete:
             # Only delete the files if the index is not protected
-            if select_index not in protected_indices:
+            if st.session_state["knowledgebase"] not in protected_indices:
                 # Delete the files
-                pkl_file = f"{select_index}.pkl"
-                index_file = f"{select_index}.index"
+                pkl_file = f"indexes/{st.session_state['knowledgebase']}.pkl"
+                index_file = f"indexes/{st.session_state['knowledgebase']}.index"
                 if os.path.exists(pkl_file):
                     os.remove(pkl_file)
                 if os.path.exists(index_file):
                     os.remove(index_file)
 
-                indices.remove(select_index)
+                indices.remove(st.session_state["knowledgebase"])
                 store_data_as_json("index-list.json", indices)
+                data = st.session_state["knowledgebase"].split("_")
+                base_name = st.session_state["knowledgebase"][len(data[0])+1:]
+                delete_knowledgebase(data[0], base_name)
+                st.success("Knowledgebase has been deleted successfully.")
+                time.sleep(1)
             else:
-                # cannot be seen because of the rerun -> time sleep for one second
                 st.warning("Database is protected and cannot be deleted.")
                 time.sleep(1)
             st.experimental_rerun()
@@ -455,16 +479,17 @@ def sign_up():
     if len(st.session_state["key"]) > 10:
         openai.api_key = st.session_state["key"]
     else:
-        st.warning("At least 10 characters are required!")
+        st.warning("At least 10 characters are required for the API key!")
+        st.stop()
+    if "_" in st.session_state["user"] or len(st.session_state["user"])<4 or len(st.session_state["password"])<4:
+        st.warning("You cannot use \"_\" in the username. Username and password need at least 4 digits.")
         st.stop()
     # signup possible if api key at least 10 characters long
     if st.button('SignUp'):
         # user does not exist yet and can be created
         if check_if_user_already_exists(st.session_state["user"]):
             add_userdata(st.session_state["user"], st.session_state["password"], st.session_state["key"])
-            st.success("You have successfully created an account. Please log in.")
-            time.sleep(2)
-            logout()
+            st.success("You have successfully created an account. You are already logged in.")
         # user already exists
         else:
             st.error("The user already exists. Please create a new user or login.")
@@ -531,10 +556,14 @@ def main():
         create_usertable()
         create_chattable()
         create_qandatable()
+        create_knowledgebase()
+    if "knowledgebase" not in st.session_state.keys():
+        #default knowledge base
+        st.session_state["knowledgebase"] = "repo4euD21"
 
     page = st.sidebar.selectbox(
         "Choose a page",
-        ["Login", "Sign up", "Chatbot", "Configure knowledge base", "Q&A", "About"],
+        ["Login", "Sign up", "Chatbot", "Q&A", "Configure knowledge base", "About"],
     )
     with st.sidebar:
         if st.button("logout"):
