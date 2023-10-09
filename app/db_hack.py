@@ -18,11 +18,14 @@ from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
 import markdown
 import hashlib
 
+
 @st.cache_resource(experimental_allow_widgets=True)
 def get_manager():
     return stx.CookieManager()
 
+
 cookie_manager = get_manager()
+
 
 def make_hashes(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
@@ -92,12 +95,6 @@ def chat_page():
     index = load_index_from_db(index_name)
 
     # start a new chat
-    if "messages" not in st.session_state.keys() or len(st.session_state["messages"]) == 0:
-        message = {"role": "assistant", "content": "Hi there, how can I help?"}
-        st.session_state["messages"] = [message]
-        if "user" in st.session_state.keys():
-            # safe messages in DB
-            add_chatdata(st.session_state["user"], message["content"], message["role"])
 
     # reproduce chat if user is logged in from DB
     if "user" in st.session_state.keys():
@@ -105,6 +102,13 @@ def chat_page():
         st.session_state["messages"] = []
         for message in messages:
             st.session_state["messages"].append({"role": message[3], "content": message[2]})
+    # start a new chat
+    if "messages" not in st.session_state.keys() or len(st.session_state["messages"]) == 0:
+        message = {"role": "assistant", "content": "Hi there, how can I help?"}
+        st.session_state["messages"] = [message]
+        if "user" in st.session_state.keys():
+            # safe messages in DB
+            add_chatdata(st.session_state["user"], message["content"], message["role"])
     for message in st.session_state["messages"]:
         if message["role"] == "user":
             user_message(message["content"])
@@ -122,7 +126,7 @@ def chat_page():
     if prompt:
         # rest of the function...
         # WHY?
-        # docs = index.similarity_search(st.session_state.dummy_text)
+        # docs = index.similarity_search(prompt)
         # doc = docs[0].page_content
 
         # prompt_template = 'The given information is: {document_data}'
@@ -138,7 +142,7 @@ def chat_page():
         # response possible because the API key was valid
         if openai.api_key and len(available_models) > 0:
             for chunk in openai.ChatCompletion.create(
-                    model=selected_model, messages=prompt, temperature=0, stream=True
+                    model=selected_model, messages=[{"role": "user", "content": prompt}], temperature=0, stream=True
             ):
                 text = chunk.choices[0].get("delta", {}).get("content")
                 if text is not None:
@@ -301,6 +305,12 @@ def qanda_page():
 
     index = load_index_from_db(index_name)
 
+    # reproduce chat if user is logged in from DB
+    if "user" in st.session_state.keys():
+        messages = get_qandadata(st.session_state["user"])
+        st.session_state["messagesqanda"] = []
+        for message in messages:
+            st.session_state["messagesqanda"].append({"role": message[3], "content": message[2]})
     # start a new chat
     if "messagesqanda" not in st.session_state.keys() or len(st.session_state["messagesqanda"]) == 0:
         message = {"role": "assistant", "content": "Hi there, how can I help?"}
@@ -308,13 +318,6 @@ def qanda_page():
         if "user" in st.session_state.keys():
             # safe messages in DB
             add_qandadata(st.session_state["user"], message["content"], message["role"])
-
-    # reproduce chat if user is logged in from DB
-    if "user" in st.session_state.keys():
-        messages = get_qandadata(st.session_state["user"])
-        st.session_state["messagesqanda"] = []
-        for message in messages:
-            st.session_state["messagesqanda"].append({"role": message[3], "content": message[2]})
     for message in st.session_state["messagesqanda"]:
         if message["role"] == "user":
             user_message(message["content"])
@@ -358,7 +361,7 @@ def qanda_page():
                                                             'k': selected_k}),
                 return_source_documents=True,
                 verbose=True)
-            llm_response = qa_chain(formatted_prompt.format_prompt(user_prompt=st.session_state.dummy_text).to_string())
+            llm_response = qa_chain(formatted_prompt.format_prompt(user_prompt=prompt).to_string())
 
             # text = f"{llm_response['result']}\nSources:\n{process_llm_response(llm_response, doc_content=showdocs)}"
             # Convert Markdown to HTML
@@ -476,7 +479,8 @@ def login():
         data = get_user_data(user)
         st.session_state["password"] = data[0][1]
         st.session_state["key"] = data[0][2]
-    if len(st.session_state["user"]) == 0 or len(st.session_state["password"]) == 0 or len(st.session_state["key"]) == 0:
+    if len(st.session_state["user"]) == 0 or len(st.session_state["password"]) == 0 or len(
+            st.session_state["key"]) == 0:
         # new login
         with st.form("login"):
             st.session_state["user"] = st.text_input('Username')
@@ -516,6 +520,7 @@ def logout():
     st.session_state["key"] = ""
     st.session_state["messages"] = []
 
+
 def main():
     st.session_state["user"] = ""
     st.session_state["password"] = ""
@@ -526,7 +531,6 @@ def main():
     create_usertable()
     create_chattable()
     create_qandatable()
-
 
     page = st.sidebar.selectbox(
         "Choose a page",
