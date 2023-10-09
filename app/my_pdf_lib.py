@@ -17,12 +17,12 @@ import faiss
 
 
 def write_file(filename, content):
-    with open(filename, 'wb') as file:
+    with open("indexes/" + filename, 'wb') as file:
         file.write(content)
 
 
 def read_file(filename):
-    with open(filename, 'rb') as file:
+    with open("indexes/" + filename, 'rb') as file:
         return file.read()
 
 
@@ -103,9 +103,8 @@ def store_index_in_db(index, name):
 
 def load_index_from_db(index_name):
     findex = read_file(f"{index_name}.index")
-
     write_file("docs.index", findex)
-    index = faiss.read_index("docs.index")
+    index = faiss.read_index("indexes/docs.index")
     VectorDB = pickle.loads(read_file(f"{index_name}.pkl"))
     VectorDB.index = index
 
