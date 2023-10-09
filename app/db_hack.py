@@ -84,19 +84,6 @@ def chat_page():
             """
     )
 
-    #try:
-        #TODO hier konfiguration welche knowledge base genutzt wird
-        #config = get_json("config.json")
-        #index_name = config["index"]
-
-    #except:
-        #st.info("No knowledge base found. Please configure one!")
-        #st.stop()
-    index = load_index_from_db(st.session_state["knowledgebase"])
-
-
-    # start a new chat
-
     # reproduce chat if user is logged in from DB
     if "user" in st.session_state.keys() and len(st.session_state["user"]) > 0:
         messages = get_chatdata(st.session_state["user"])
@@ -125,14 +112,6 @@ def chat_page():
 
     # produce response
     if prompt:
-        # WHY? Throws error currently: KeyError: 3375
-        #docs = index.similarity_search(prompt)
-        #doc = docs[0].page_content
-
-        #prompt_template = 'The given information is: {document_data}'
-        #prompt_template = prompt_template.format(document_data=doc)
-        #message = {"role": "system", "content": prompt_template}
-        #print(message)
 
         with st.container():
             user_message(prompt)
@@ -142,8 +121,9 @@ def chat_page():
         result = ""
         # response possible because the API key was valid
         if openai.api_key and len(available_models) > 0:
+
             for chunk in openai.ChatCompletion.create(
-                    model=selected_model, messages=[{"role": "user", "content": prompt}], temperature=0, stream=True
+                    model=selected_model, messages=st.session_state["messages"], temperature=0, stream=True
             ):
                 text = chunk.choices[0].get("delta", {}).get("content")
                 if text is not None:
@@ -248,10 +228,10 @@ def config_page():
                     st.error("Could not create new index. Check your OpenAI API key.")
     else:
         delete = st.button("Delete")
-
-        config = {}
-        config["index"] = st.session_state["knowledgebase"]
-        store_data_as_json("config.json", config)
+        #TODO: Is this still needed?
+        #config = {}
+        #config["index"] = st.session_state["knowledgebase"]
+        #store_data_as_json("config.json", config)
 
         if delete:
             # Only delete the files if the index is not protected
