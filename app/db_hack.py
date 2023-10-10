@@ -26,6 +26,22 @@ def get_manager():
 
 cookie_manager = get_manager()
 
+def get_api_key_if_missing():
+    # when no user logged in: application can be used by only giving an API key
+    if api_key_missing():
+        st.session_state["key"] = st.text_input(
+            "Please, type in your OpenAI API key to continue", type="password", help="at least 10 characters required"
+        )
+        if len(st.session_state.key) > 10:
+            openai.api_key = st.session_state.key
+        else:
+            st.warning("At least 10 characters are required!")
+            st.stop()
+def is_user_logged_in():
+    return "user" in st.session_state.keys() and len(st.session_state["user"]) > 0
+
+def api_key_missing():
+    return "key" not in st.session_state.keys() or len(st.session_state["key"]) == 0
 
 def make_hashes(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
@@ -52,25 +68,16 @@ def get_openai_models():
         available_models = ["gpt-3.5-turbo"]
     return available_models
 
-
-def chat_page():
-    # when no user logged in: application can be used by only giving an API key
-    if "key" not in st.session_state.keys() or len(st.session_state["key"]) == 0:
-        st.session_state["key"] = st.text_input(
-            "Please, type in your OpenAI API key to continue", type="password", help="at least 10 characters required"
-        )
-        if len(st.session_state.key) > 10:
-            openai.api_key = st.session_state.key
-        else:
-            st.warning("At least 10 characters are required!")
-            st.stop()
+def get_available_models():
     # try to get available models to see if API key is valid
     try:
         available_models = get_openai_models()
     except:
         st.error("Your provided OpenAI API key is not valid.")
         available_models = []
-    selected_model = st.selectbox("Please select a model", options=available_models)
+    return available_models
+
+def chat_page_styling():
     st.title("Academate")
     st.header("Questions and  Answering Chatbot")
     st.write(
@@ -84,31 +91,73 @@ def chat_page():
             """
     )
 
+def reproduce_chat_if_user_logged_in(typeOfMessage):
     # reproduce chat if user is logged in from DB
-    if "user" in st.session_state.keys() and len(st.session_state["user"]) > 0:
-        messages = get_chatdata(st.session_state["user"])
-        st.session_state["messages"] = []
+    if is_user_logged_in():
+        if typeOfMessage == "messages":
+            messages = get_chatdata(st.session_state["user"])
+            st.session_state[typeOfMessage] = []
+        elif typeOfMessage == "messagesqanda":
+            messages = get_qandadata(st.session_state["user"])
+            st.session_state[typeOfMessage] = []
         for message in messages:
-            st.session_state["messages"].append({"role": message[3], "content": message[2]})
+            st.session_state[typeOfMessage].append({"role": message[3], "content": message[2]})
+
+def is_chat_empty(typeOfChat):
+    return typeOfChat not in st.session_state.keys() or len(st.session_state[typeOfChat]) == 0
+def start_new_chat_if_empty(typeOfChat):
     # start a new chat
-    if "messages" not in st.session_state.keys() or len(st.session_state["messages"]) == 0:
+    if is_chat_empty(typeOfChat):
         message = {"role": "assistant", "content": "Hi there, how can I help?"}
-        st.session_state["messages"] = [message]
-        if "user" in st.session_state.keys():
-            # safe messages in DB
-            add_chatdata(st.session_state["user"], message["content"], message["role"])
-    for message in st.session_state["messages"]:
+        st.session_state[typeOfChat] = [message]
+        if is_user_logged_in():
+            save_message_in_db(typeOfChat, message)
+
+def print_current_chat(typeOfChat):
+    for message in st.session_state[typeOfChat]:
         if message["role"] == "user":
             user_message(message["content"])
         elif message["role"] == "assistant":
             bot_message(message["content"], bot_name="Academate")
 
-    # get message from user
+def clear_chat_option(typeOfChat):
+    #clear chat data
+    st.session_state[typeOfChat] = []
+    # delete chat in DB as well
+    if typeOfChat == "messages":
+        delete_chat(st.session_state["user"])
+    elif typeOfChat == "messagesqanda":
+        delete_qanda(st.session_state["user"])
+    st.experimental_rerun()
+
+def save_message_in_db(typeOfChat, message):
+    if typeOfChat == "messages":
+        add_chatdata(st.session_state["user"], message["content"], message["role"])
+    elif typeOfChat == "messagesqanda":
+        add_qandadata(st.session_state["user"], message["content"], message["role"])
+def get_user_message(typeOfChat):
     if prompt := st.chat_input():
         message = {"role": "user", "content": prompt}
-        st.session_state["messages"].append(message)
-        if "user" in st.session_state.keys():
-            add_chatdata(st.session_state["user"], message["content"], message["role"])
+        st.session_state[typeOfChat].append(message)
+        if is_user_logged_in():
+            save_message_in_db(typeOfChat, message)
+    return prompt
+
+def chat_page():
+    get_api_key_if_missing()
+
+    available_models = get_available_models()
+
+    selected_model = st.selectbox("Please select a model", options=available_models)
+    chat_page_styling()
+
+    reproduce_chat_if_user_logged_in("messages")
+
+    start_new_chat_if_empty("messages")
+
+    print_current_chat("messages")
+
+    prompt = get_user_message("messages")
 
     # produce response
     if prompt:
@@ -121,21 +170,23 @@ def chat_page():
         result = ""
         # response possible because the API key was valid
         if openai.api_key and len(available_models) > 0:
+            try:
 
-            for chunk in openai.ChatCompletion.create(
-                    model=selected_model, messages=st.session_state["messages"], temperature=0, stream=True
-            ):
-                text = chunk.choices[0].get("delta", {}).get("content")
-                if text is not None:
-                    response.append(text)
-                    result = "".join(response).strip()
+                for chunk in openai.ChatCompletion.create(
+                        model=selected_model, messages=st.session_state["messages"], temperature=0, stream=True
+                ):
+                    text = chunk.choices[0].get("delta", {}).get("content")
+                    if text is not None:
+                        response.append(text)
+                        result = "".join(response).strip()
 
-                    botmsg.update(result)
-            message = {"role": "assistant", "content": result}
-            st.session_state["messages"].append(message)
-            if "user" in st.session_state.keys():
-                add_chatdata(st.session_state["user"], message["content"], message["role"])
-
+                        botmsg.update(result)
+                message = {"role": "assistant", "content": result}
+                st.session_state["messages"].append(message)
+                if is_user_logged_in():
+                    save_message_in_db("messages", message)
+            except:
+                st.error("Something went wrong while producing a response.")
         # no response possible because the API key was not valid -> failure message
         else:
             failure_message = """
@@ -145,31 +196,17 @@ def chat_page():
             message = {"role": "assistant", "content": failure_message}
             st.session_state["messages"].append(message)
             botmsg.update(failure_message)
-            if "user" in st.session_state.keys():
-                add_chatdata(st.session_state["user"], message["content"], message["role"])
-    # Add clear chat button
+            if is_user_logged_in():
+                save_message_in_db("messages", message)
+
     if len(st.session_state["messages"]) != 0 and st.button("Clear Chat"):
-        st.session_state["messages"] = []
-        # delete chat in DB as well
-        delete_chat(st.session_state["user"])
-        st.experimental_rerun()
+        clear_chat_option("messages")
 
 
 def config_page():
-    # when no user logged in: application can be used by only giving an API key
-    if "key" not in st.session_state.keys() or len(st.session_state["key"]) == 0:
-        st.session_state["key"] = st.text_input(
-            "Please, type in your OpenAI API key to continue", type="password", help="at least 10 characters required"
-        )
-        if len(st.session_state.key) > 10:
-            openai.api_key = st.session_state.key
-        else:
-            st.warning("At least 10 characters are required!")
-            st.stop()
-    try:
-        get_openai_models()
-    except:
-        st.error("Your provided OpenAI API key is not valid.")
+    get_api_key_if_missing()
+
+    get_available_models()
 
     st.title("Configure knowledge base")
 
@@ -179,7 +216,7 @@ def config_page():
         for index in indices_unfiltered:
             if index.startswith("index_") or index == "repo4euD21":
                 indices.append(index)
-        if "user" in st.session_state.keys() and len(st.session_state["user"])>0:
+        if is_user_logged_in():
             data = get_knowledgebases_per_user(st.session_state["user"])
             for base in data:
                 indices.append(st.session_state["user"]+"_"+base[1])
@@ -210,7 +247,7 @@ def config_page():
                 try:
                     with st.spinner("Indexing"):
                         index = get_index_for_pdf(files, openai_api_key=st.session_state["key"])
-                        if "user" in st.session_state.keys() and len(st.session_state["user"]) > 0:
+                        if is_user_logged_in():
                             user_index = st.session_state["user"] + "_" + name
                             store_index_in_db(index, name=user_index)
                             indices = indices + [user_index]
@@ -270,22 +307,9 @@ def process_llm_response(llm_response, doc_content=True):
 
 
 def qanda_page():
-    # when no user logged in: application can be used by only giving an API key
-    if "key" not in st.session_state.keys() or len(st.session_state["key"]) == 0:
-        st.session_state["key"] = st.text_input(
-            "Please, type in your OpenAI API key to continue", type="password", help="at least 10 characters required"
-        )
-        if len(st.session_state.key) > 10:
-            openai.api_key = st.session_state.key
-        else:
-            st.warning("At least 10 characters are required!")
-            st.stop()
-    # try to get available models to see if API key is valid
-    try:
-        available_models = get_openai_models()
-    except:
-        st.error("Your provided OpenAI API key is not valid.")
-        available_models = []
+    get_api_key_if_missing()
+
+    available_models = get_available_models()
     selected_model = st.selectbox("Please select a model", options=available_models)
 
     chaintype = st.selectbox("Please select chain type", options=['stuff', "map_reduce", "refine"], index=0)
@@ -304,32 +328,11 @@ def qanda_page():
         st.info("No knowledge base found. Please configure one!")
         st.stop()
 
-    # reproduce chat if user is logged in from DB
-    if "user" in st.session_state.keys() and len(st.session_state["user"]) > 0:
-        messages = get_qandadata(st.session_state["user"])
-        st.session_state["messagesqanda"] = []
-        for message in messages:
-            st.session_state["messagesqanda"].append({"role": message[3], "content": message[2]})
-    # start a new chat
-    if "messagesqanda" not in st.session_state.keys() or len(st.session_state["messagesqanda"]) == 0:
-        message = {"role": "assistant", "content": "Hi there, how can I help?"}
-        st.session_state["messagesqanda"] = [message]
-        if "user" in st.session_state.keys():
-            # safe messages in DB
-            add_qandadata(st.session_state["user"], message["content"], message["role"])
-    for message in st.session_state["messagesqanda"]:
-        if message["role"] == "user":
-            user_message(message["content"])
-        elif message["role"] == "assistant":
-            bot_message(message["content"], bot_name="Academate")
+    reproduce_chat_if_user_logged_in("messagesqanda")
+    start_new_chat_if_empty("messagesqanda")
+    print_current_chat("messagesqanda")
 
-    # get message from user
-    if prompt := st.chat_input():
-        message = {"role": "user", "content": prompt}
-        st.session_state["messagesqanda"].append(message)
-        if "user" in st.session_state.keys():
-            add_qandadata(st.session_state["user"], message["content"], message["role"])
-
+    prompt = get_user_message("messagesqanda")
     if prompt:
         with st.container():
             user_message(prompt)
@@ -337,45 +340,47 @@ def qanda_page():
 
         # response possible because the API key was valid
         if openai.api_key and len(available_models) > 0:
+            try:
 
-            formatted_prompt = ChatPromptTemplate(
-                messages=[
-                    HumanMessagePromptTemplate.from_template("""You are great at answering questions about a given \
-                                                                database in a technical but easy to understand manner. 
-                                                                If you cannot find a direct answer to the question in \
-                                                                the documents I gave you, you must say "In your provided \
-                                                                context i don't know the answer to your question". \
-                                                                When you don't know the answer to a question you admit \
-                                                                that you don't know. Here is a question:\
-                                                                {user_prompt}""")
-                ],
-                input_variables=["user_prompt"])
+                formatted_prompt = ChatPromptTemplate(
+                    messages=[
+                        HumanMessagePromptTemplate.from_template("""You are great at answering questions about a given \
+                                                                    database in a technical but easy to understand manner. 
+                                                                    If you cannot find a direct answer to the question in \
+                                                                    the documents I gave you, you must say "In your provided \
+                                                                    context i don't know the answer to your question". \
+                                                                    When you don't know the answer to a question you admit \
+                                                                    that you don't know. Here is a question:\
+                                                                    {user_prompt}""")
+                    ],
+                    input_variables=["user_prompt"])
 
-            # Create the chain to answer questions
-            qa_chain = RetrievalQA.from_chain_type(
-                llm=ChatOpenAI(temperature=0.0, model=selected_model, openai_api_key=openai.api_key),
-                chain_type=chaintype,
-                retriever=index.as_retriever(search_type="mmr",
-                                             search_kwargs={'fetch_k': selected_fetch_k,
-                                                            'k': selected_k}),
-                return_source_documents=True,
-                verbose=True)
-            llm_response = qa_chain(formatted_prompt.format_prompt(user_prompt=prompt).to_string())
+                # Create the chain to answer questions
+                qa_chain = RetrievalQA.from_chain_type(
+                    llm=ChatOpenAI(temperature=0.0, model=selected_model, openai_api_key=openai.api_key, max_retries=3, max_tokens=1),
+                    chain_type=chaintype,
+                    retriever=index.as_retriever(search_type="mmr",
+                                                 search_kwargs={'fetch_k': selected_fetch_k,
+                                                                'k': selected_k}),
+                    return_source_documents=True,
+                    verbose=True)
+                llm_response = qa_chain(formatted_prompt.format_prompt(user_prompt=prompt).to_string())
 
-            # text = f"{llm_response['result']}\nSources:\n{process_llm_response(llm_response, doc_content=showdocs)}"
-            # Convert Markdown to HTML
-            html_content = markdown.markdown(llm_response['result'])
-            if "In your provided context i don" in llm_response['result']:
-                text = f"{html_content}"
-            else:
-                text = f"{html_content}<br><strong>Sources:</strong><br>{process_llm_response(llm_response, doc_content=show_sources)}"
-            result = "".join(text).strip()
-            botmsg.update(result)
-            message = {"role": "assistant", "content": result}
-            st.session_state["messagesqanda"].append(message)
-            if "user" in st.session_state.keys():
-                add_qandadata(st.session_state["user"], message["content"], message["role"])
-
+                # text = f"{llm_response['result']}\nSources:\n{process_llm_response(llm_response, doc_content=showdocs)}"
+                # Convert Markdown to HTML
+                html_content = markdown.markdown(llm_response['result'])
+                if "In your provided context i don" in llm_response['result']:
+                    text = f"{html_content}"
+                else:
+                    text = f"{html_content}<br><strong>Sources:</strong><br>{process_llm_response(llm_response, doc_content=show_sources)}"
+                result = "".join(text).strip()
+                botmsg.update(result)
+                message = {"role": "assistant", "content": result}
+                st.session_state["messagesqanda"].append(message)
+                if is_user_logged_in():
+                    save_message_in_db("messagesqanda", message)
+            except:
+                st.error("Something went wrong while producing a response.")
         # no response possible because the API key was not valid -> failure message
         else:
             failure_message = """
@@ -385,15 +390,10 @@ def qanda_page():
             message = {"role": "assistant", "content": failure_message}
             st.session_state["messagesqanda"].append(message)
             botmsg.update(failure_message)
-            if "user" in st.session_state.keys():
-                add_qandadata(st.session_state["user"], message["content"], message["role"])
-
-    # Add clear chat button
+            if is_user_logged_in():
+                save_message_in_db("messagesqanda", message)
     if len(st.session_state["messagesqanda"]) != 0 and st.button("Clear Chat"):
-        st.session_state["messagesqanda"] = []
-        # delete chat in DB as well
-        delete_qanda(st.session_state["user"])
-        st.experimental_rerun()
+        clear_chat_option("messagesqanda")
 
 
 def visualize_index_page():
