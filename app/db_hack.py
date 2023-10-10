@@ -298,15 +298,11 @@ def qanda_page():
     st.title("Academate")
     st.header("Questions and Answering with sources")
 
-    try:
-        config = get_json("config.json")
-        index_name = config["index"]
-
-    except:
+    if "knowledgebase" in st.session_state.keys() and len(st.session_state["knowledgebase"])>0:
+        index = load_index_from_db(st.session_state["knowledgebase"])
+    else:
         st.info("No knowledge base found. Please configure one!")
         st.stop()
-
-    index = load_index_from_db(index_name)
 
     # reproduce chat if user is logged in from DB
     if "user" in st.session_state.keys() and len(st.session_state["user"]) > 0:
