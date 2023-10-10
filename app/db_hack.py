@@ -120,7 +120,7 @@ def print_current_chat(typeOfChat):
         elif message["role"] == "assistant":
             bot_message(message["content"], bot_name="Academate")
 
-def clear_chat_option(typeOfChat):
+def clear_chat(typeOfChat):
     #clear chat data
     st.session_state[typeOfChat] = []
     # delete chat in DB as well
@@ -200,7 +200,7 @@ def chat_page():
                 save_message_in_db("messages", message)
 
     if len(st.session_state["messages"]) != 0 and st.button("Clear Chat"):
-        clear_chat_option("messages")
+        clear_chat("messages")
 
 
 def config_page():
@@ -393,7 +393,7 @@ def qanda_page():
             if is_user_logged_in():
                 save_message_in_db("messagesqanda", message)
     if len(st.session_state["messagesqanda"]) != 0 and st.button("Clear Chat"):
-        clear_chat_option("messagesqanda")
+        clear_chat("messagesqanda")
 
 
 def visualize_index_page():
