@@ -157,14 +157,30 @@ def chat_page():
 
     print_current_chat("messages")
 
+    index = load_index_from_db(st.session_state["knowledgebase"])
+
+
     prompt = get_user_message("messages")
 
     # produce response
     if prompt:
-
         with st.container():
             user_message(prompt)
             botmsg = bot_message("...", bot_name="Academate")
+
+        try:
+            #add context of the knowledge base to the messages
+            docs = index.similarity_search(prompt)
+            doc = docs[0].page_content
+            prompt_template = 'The given information is: {document_data}'
+            prompt_template = prompt_template.format(document_data=doc)
+            context= {"role": "system", "content": prompt_template}
+            save_message_in_db("messages", context)
+            st.session_state["messages"].append(context)
+        except Exception as e:
+            #st.write(e)
+            st.error("An error occured with the chosen knowledge base. The knowledge base could not be used in the following response.")
+
 
         response = []
         result = ""
@@ -227,7 +243,8 @@ def config_page():
         indices = []
 
     dip = indices + ["Create New"]
-    st.session_state["knowledgebase"] = st.selectbox("Select knowledge base", options=dip)
+    chosen_base = dip.index(st.session_state["knowledgebase"])
+    st.session_state["knowledgebase"] = st.selectbox("Select knowledge base", options=dip, index = chosen_base)
 
     # List of protected index names
     protected_indices = ["repo4euD21"]
