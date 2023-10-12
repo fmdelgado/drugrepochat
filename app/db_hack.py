@@ -210,6 +210,8 @@ def config_page():
     get_available_models()
 
     st.title("Configure knowledge base")
+    if not is_user_logged_in():
+        st.warning("You are not logged in. Newly created knowledge bases will be available for everyone.")
 
     try:
         indices = []
@@ -239,7 +241,7 @@ def config_page():
 
             name = st.text_input("Step 2 - Choose a name for your index")
             index_name = "index_"+name
-            user_name = "user_"+name
+            user_name = st.session_state["user"]+"_"+name
             button = st.form_submit_button("Create Index")
             if index_name in indices or user_name in indices:
                 st.warning("Please use an unique name!")
@@ -476,7 +478,7 @@ def login():
         data = get_user_data(user)
         st.session_state["password"] = data[0][1]
         st.session_state["key"] = data[0][2]
-        openai.api_key = st.session_state["key"]
+        openai.api_key = data[0][2]
     if not is_user_logged_in():
         # new login
         with st.form("login"):
