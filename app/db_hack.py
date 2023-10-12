@@ -395,7 +395,8 @@ def qanda_page():
                 st.session_state["messagesqanda"].append(message)
                 if is_user_logged_in():
                     save_message_in_db("messagesqanda", message)
-            except:
+            except Exception as e:
+                st.write(e)
                 st.error("Something went wrong while producing a response.")
         # no response possible because the API key was not valid -> failure message
         else:
