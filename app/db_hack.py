@@ -245,7 +245,12 @@ def config_page():
         indices = []
 
     dip = indices + ["Create New"]
-    chosen_base = dip.index(st.session_state["knowledgebase"])
+    if not st.session_state["knowledgebase"]=="Create New":
+        chosen_base = dip.index(st.session_state["knowledgebase"])
+    else:
+        #default
+        chosen_base = 0
+
     st.session_state["knowledgebase"] = st.selectbox("Select knowledge base", options=dip, index = chosen_base)
 
     # List of protected index names
