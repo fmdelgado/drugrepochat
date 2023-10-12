@@ -33,7 +33,7 @@ def get_api_key_if_missing():
             "Please, type in your OpenAI API key to continue", type="password", help="at least 10 characters required"
         )
         if len(st.session_state.key) > 10:
-            openai.api_key = st.session_state.key
+            openai.api_key = st.session_state["key"]
         else:
             st.warning("At least 10 characters are required!")
             st.stop()
@@ -185,7 +185,8 @@ def chat_page():
                 st.session_state["messages"].append(message)
                 if is_user_logged_in():
                     save_message_in_db("messages", message)
-            except:
+            except Exception as e:
+                st.write(e)
                 st.error("Something went wrong while producing a response.")
         # no response possible because the API key was not valid -> failure message
         else:
@@ -265,10 +266,6 @@ def config_page():
                     st.error("Could not create new index. Check your OpenAI API key.")
     else:
         delete = st.button("Delete")
-        #TODO: Is this still needed?
-        #config = {}
-        #config["index"] = st.session_state["knowledgebase"]
-        #store_data_as_json("config.json", config)
 
         if delete:
             # Only delete the files if the index is not protected
@@ -357,7 +354,7 @@ def qanda_page():
 
                 # Create the chain to answer questions
                 qa_chain = RetrievalQA.from_chain_type(
-                    llm=ChatOpenAI(temperature=0.0, model=selected_model, openai_api_key=openai.api_key, max_retries=3, max_tokens=1),
+                    llm=ChatOpenAI(temperature=0.0, model=selected_model, openai_api_key=openai.api_key),
                     chain_type=chaintype,
                     retriever=index.as_retriever(search_type="mmr",
                                                  search_kwargs={'fetch_k': selected_fetch_k,
@@ -479,8 +476,8 @@ def login():
         data = get_user_data(user)
         st.session_state["password"] = data[0][1]
         st.session_state["key"] = data[0][2]
-    if len(st.session_state["user"]) == 0 or len(st.session_state["password"]) == 0 or len(
-            st.session_state["key"]) == 0:
+        openai.api_key = st.session_state["key"]
+    if not is_user_logged_in():
         # new login
         with st.form("login"):
             st.session_state["user"] = st.text_input('Username')
