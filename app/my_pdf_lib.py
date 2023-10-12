@@ -94,7 +94,7 @@ def get_index_for_pdf(pdf_files, openai_api_key):
 
 
 def store_index_in_db(index, name):
-    faiss.write_index(index.index, "docs.index")
+    faiss.write_index(index.index, "indexes/docs.index")
     # Open the file and dump to local storage
     write_file(f"{name}.index", read_file("docs.index"))
     index.index = None

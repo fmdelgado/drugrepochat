@@ -72,7 +72,8 @@ def get_available_models():
     # try to get available models to see if API key is valid
     try:
         available_models = get_openai_models()
-    except:
+    except Exception as e:
+        #st.write(e)
         st.error("Your provided OpenAI API key is not valid.")
         available_models = []
     return available_models
@@ -202,7 +203,7 @@ def chat_page():
                 if is_user_logged_in():
                     save_message_in_db("messages", message)
             except Exception as e:
-                st.write(e)
+                #st.write(e)
                 st.error("Something went wrong while producing a response.")
         # no response possible because the API key was not valid -> failure message
         else:
@@ -240,6 +241,7 @@ def config_page():
             for base in data:
                 indices.append(st.session_state["user"]+"_"+base[1])
     except Exception as e:
+        #st.write(e)
         indices = []
 
     dip = indices + ["Create New"]
@@ -282,6 +284,7 @@ def config_page():
                     time.sleep(1)
                     st.experimental_rerun()
                 except Exception as e:
+                    #st.write(e)
                     st.error("Could not create new index. Check your OpenAI API key.")
     else:
         delete = st.button("Delete")
@@ -396,7 +399,7 @@ def qanda_page():
                 if is_user_logged_in():
                     save_message_in_db("messagesqanda", message)
             except Exception as e:
-                st.write(e)
+                #st.write(e)
                 st.error("Something went wrong while producing a response.")
         # no response possible because the API key was not valid -> failure message
         else:
