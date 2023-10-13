@@ -26,6 +26,7 @@ def get_manager():
 
 cookie_manager = get_manager()
 
+
 def get_api_key_if_missing():
     # when no user logged in: application can be used by only giving an API key
     if api_key_missing():
@@ -37,11 +38,15 @@ def get_api_key_if_missing():
         else:
             st.warning("At least 10 characters are required!")
             st.stop()
+
+
 def is_user_logged_in():
     return "user" in st.session_state.keys() and len(st.session_state["user"]) > 0
 
+
 def api_key_missing():
     return "key" not in st.session_state.keys() or len(st.session_state["key"]) == 0
+
 
 def make_hashes(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
@@ -68,15 +73,17 @@ def get_openai_models():
         available_models = ["gpt-3.5-turbo"]
     return available_models
 
+
 def get_available_models():
     # try to get available models to see if API key is valid
     try:
         available_models = get_openai_models()
     except Exception as e:
-        #st.write(e)
+        # st.write(e)
         st.error("Your provided OpenAI API key is not valid.")
         available_models = []
     return available_models
+
 
 def chat_page_styling():
     st.title("Academate")
@@ -92,6 +99,7 @@ def chat_page_styling():
             """
     )
 
+
 def reproduce_chat_if_user_logged_in(typeOfMessage):
     # reproduce chat if user is logged in from DB
     if is_user_logged_in():
@@ -104,8 +112,11 @@ def reproduce_chat_if_user_logged_in(typeOfMessage):
         for message in messages:
             st.session_state[typeOfMessage].append({"role": message[3], "content": message[2]})
 
+
 def is_chat_empty(typeOfChat):
     return typeOfChat not in st.session_state.keys() or len(st.session_state[typeOfChat]) == 0
+
+
 def start_new_chat_if_empty(typeOfChat):
     # start a new chat
     if is_chat_empty(typeOfChat):
@@ -114,6 +125,7 @@ def start_new_chat_if_empty(typeOfChat):
         if is_user_logged_in():
             save_message_in_db(typeOfChat, message)
 
+
 def print_current_chat(typeOfChat):
     for message in st.session_state[typeOfChat]:
         if message["role"] == "user":
@@ -121,8 +133,9 @@ def print_current_chat(typeOfChat):
         elif message["role"] == "assistant":
             bot_message(message["content"], bot_name="Academate")
 
+
 def clear_chat(typeOfChat):
-    #clear chat data
+    # clear chat data
     st.session_state[typeOfChat] = []
     # delete chat in DB as well
     if typeOfChat == "messages":
@@ -131,11 +144,14 @@ def clear_chat(typeOfChat):
         delete_qanda(st.session_state["user"])
     st.experimental_rerun()
 
+
 def save_message_in_db(typeOfChat, message):
     if typeOfChat == "messages":
         add_chatdata(st.session_state["user"], message["content"], message["role"])
     elif typeOfChat == "messagesqanda":
         add_qandadata(st.session_state["user"], message["content"], message["role"])
+
+
 def get_user_message(typeOfChat):
     if prompt := st.chat_input():
         message = {"role": "user", "content": prompt}
@@ -143,6 +159,7 @@ def get_user_message(typeOfChat):
         if is_user_logged_in():
             save_message_in_db(typeOfChat, message)
     return prompt
+
 
 def chat_page():
     get_api_key_if_missing()
@@ -160,7 +177,6 @@ def chat_page():
 
     index = load_index_from_db(st.session_state["knowledgebase"])
 
-
     prompt = get_user_message("messages")
 
     # produce response
@@ -170,18 +186,18 @@ def chat_page():
             botmsg = bot_message("...", bot_name="Academate")
 
         try:
-            #add context of the knowledge base to the messages
+            # add context of the knowledge base to the messages
             docs = index.similarity_search(prompt)
             doc = docs[0].page_content
             prompt_template = 'The given information is: {document_data}'
             prompt_template = prompt_template.format(document_data=doc)
-            context= {"role": "system", "content": prompt_template}
+            context = {"role": "system", "content": prompt_template}
             save_message_in_db("messages", context)
             st.session_state["messages"].append(context)
         except Exception as e:
-            #st.write(e)
-            st.error("An error occured with the chosen knowledge base. The knowledge base could not be used in the following response.")
-
+            # st.write(e)
+            st.error(
+                "An error occured with the chosen knowledge base. The knowledge base could not be used in the following response.")
 
         response = []
         result = ""
@@ -203,7 +219,7 @@ def chat_page():
                 if is_user_logged_in():
                     save_message_in_db("messages", message)
             except Exception as e:
-                #st.write(e)
+                # st.write(e)
                 st.error("Something went wrong while producing a response.")
         # no response possible because the API key was not valid -> failure message
         else:
@@ -239,19 +255,19 @@ def config_page():
         if is_user_logged_in():
             data = get_knowledgebases_per_user(st.session_state["user"])
             for base in data:
-                indices.append(st.session_state["user"]+"_"+base[1])
+                indices.append(st.session_state["user"] + "_" + base[1])
     except Exception as e:
-        #st.write(e)
+        # st.write(e)
         indices = []
 
     dip = indices + ["Create New"]
-    if not st.session_state["knowledgebase"]=="Create New":
+    if not st.session_state["knowledgebase"] == "Create New":
         chosen_base = dip.index(st.session_state["knowledgebase"])
     else:
-        #default
+        # default
         chosen_base = 0
 
-    st.session_state["knowledgebase"] = st.selectbox("Select knowledge base", options=dip, index = chosen_base)
+    st.session_state["knowledgebase"] = st.selectbox("Select knowledge base", options=dip, index=chosen_base)
 
     # List of protected index names
     protected_indices = ["repo4euD21"]
@@ -264,8 +280,8 @@ def config_page():
             )
 
             name = st.text_input("Step 2 - Choose a name for your index")
-            index_name = "index_"+name
-            user_name = st.session_state["user"]+"_"+name
+            index_name = "index_" + name
+            user_name = st.session_state["user"] + "_" + name
             button = st.form_submit_button("Create Index")
             if index_name in indices or user_name in indices:
                 st.warning("Please use an unique name!")
@@ -289,7 +305,7 @@ def config_page():
                     time.sleep(1)
                     st.experimental_rerun()
                 except Exception as e:
-                    #st.write(e)
+                    # st.write(e)
                     st.error("Could not create new index. Check your OpenAI API key.")
     else:
         delete = st.button("Delete")
@@ -308,7 +324,7 @@ def config_page():
                 indices.remove(st.session_state["knowledgebase"])
                 store_data_as_json("index-list.json", indices)
                 data = st.session_state["knowledgebase"].split("_")
-                base_name = st.session_state["knowledgebase"][len(data[0])+1:]
+                base_name = st.session_state["knowledgebase"][len(data[0]) + 1:]
                 delete_knowledgebase(data[0], base_name)
                 st.success("Knowledgebase has been deleted successfully.")
                 time.sleep(1)
@@ -346,7 +362,7 @@ def qanda_page():
     st.title("Academate")
     st.header("Questions and Answering with sources")
 
-    if "knowledgebase" in st.session_state.keys() and len(st.session_state["knowledgebase"])>0:
+    if "knowledgebase" in st.session_state.keys() and len(st.session_state["knowledgebase"]) > 0:
         index = load_index_from_db(st.session_state["knowledgebase"])
     else:
         st.info("No knowledge base found. Please configure one!")
@@ -404,7 +420,7 @@ def qanda_page():
                 if is_user_logged_in():
                     save_message_in_db("messagesqanda", message)
             except Exception as e:
-                #st.write(e)
+                # st.write(e)
                 st.error("Something went wrong while producing a response.")
         # no response possible because the API key was not valid -> failure message
         else:
@@ -482,7 +498,7 @@ def sign_up():
     else:
         st.warning("At least 10 characters are required for the API key!")
         st.stop()
-    if "_" in st.session_state["user"] or len(st.session_state["user"])<4 or len(st.session_state["password"])<4:
+    if "_" in st.session_state["user"] or len(st.session_state["user"]) < 4 or len(st.session_state["password"]) < 4:
         st.warning("You cannot use \"_\" in the username. Username and password need at least 4 digits.")
         st.stop()
     # signup possible if api key at least 10 characters long
@@ -559,7 +575,7 @@ def main():
         create_qandatable()
         create_knowledgebase()
     if "knowledgebase" not in st.session_state.keys():
-        #default knowledge base
+        # default knowledge base
         st.session_state["knowledgebase"] = "repo4euD21"
 
     page = st.sidebar.selectbox(
