@@ -506,6 +506,8 @@ def sign_up():
         # user does not exist yet and can be created
         if check_if_user_already_exists(st.session_state["user"]):
             add_userdata(st.session_state["user"], st.session_state["password"], st.session_state["key"])
+            cookie_manager.set("user", st.session_state["user"])  # Expires in a day by default
+            cookie_manager.get_all()
             st.success("You have successfully created an account. You are already logged in.")
         # user already exists
         else:
@@ -549,13 +551,13 @@ def login():
                 st.warning("At least 10 characters are required!")
                 st.stop()
     # Login failed
-    elif len(st.session_state["user"]) > 0 and len(st.session_state["password"]) > 0:
+    elif "user" in st.session_state.keys() and  "password" in st.session_state.keys() and len(st.session_state["user"]) > 0 and len(st.session_state["password"]) > 0:
         st.error("Incorrect login!")
 
 
 def logout():
     cookie_manager.delete("user")
-    cookies = cookie_manager.get_all()
+    cookie_manager.get_all()
     st.session_state["user"] = ""
     st.session_state["password"] = ""
     st.session_state["key"] = ""
