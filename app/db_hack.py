@@ -4,7 +4,6 @@ import streamlit as st
 import openai
 import sys
 
-import extra_streamlit_components as stx
 from my_pdf_lib import load_index_from_db, store_index_in_db, get_index_for_pdf
 
 sys.path.append('/Users/fernando/Documents/Research/drugrepochat/app')
@@ -17,14 +16,6 @@ from langchain.chat_models import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
 import markdown
 import hashlib
-
-
-@st.cache_resource(experimental_allow_widgets=True)
-def get_manager():
-    return stx.CookieManager()
-
-
-cookie_manager = get_manager()
 
 
 def get_api_key_if_missing():
@@ -45,7 +36,7 @@ def is_user_logged_in():
 
 
 def api_key_missing():
-    return "key" not in st.session_state.keys() or len(st.session_state["key"]) == 0
+    return "key" not in st.session_state.keys() or len(st.session_state["key"]) == 0 or not openai.api_key
 
 
 def make_hashes(password):
@@ -252,10 +243,9 @@ def config_page():
         for index in indices_unfiltered:
             if index.startswith("index_") or index == "repo4euD21":
                 indices.append(index)
-        if is_user_logged_in():
-            data = get_knowledgebases_per_user(st.session_state["user"])
-            for base in data:
-                indices.append(st.session_state["user"] + "_" + base[1])
+            elif is_user_logged_in() and index.startswith(st.session_state["user"]+"_"):
+                indices.append(index)
+
     except Exception as e:
         # st.write(e)
         indices = []
@@ -295,7 +285,6 @@ def config_page():
                             store_index_in_db(index, name=user_index)
                             indices = indices + [user_index]
                             store_data_as_json("index-list.json", indices)
-                            add_knowledgebase(st.session_state["user"], name)
                         else:
                             index_name = "index_" + name
                             store_index_in_db(index, name=index_name)
@@ -325,7 +314,6 @@ def config_page():
                 store_data_as_json("index-list.json", indices)
                 data = st.session_state["knowledgebase"].split("_")
                 base_name = st.session_state["knowledgebase"][len(data[0]) + 1:]
-                delete_knowledgebase(data[0], base_name)
                 st.success("Knowledgebase has been deleted successfully.")
                 time.sleep(1)
             else:
@@ -506,8 +494,6 @@ def sign_up():
         # user does not exist yet and can be created
         if check_if_user_already_exists(st.session_state["user"]):
             add_userdata(st.session_state["user"], st.session_state["password"], st.session_state["key"])
-            cookie_manager.set("user", st.session_state["user"])  # Expires in a day by default
-            cookie_manager.get_all()
             st.success("You have successfully created an account. You are already logged in.")
         # user already exists
         else:
@@ -516,13 +502,6 @@ def sign_up():
 
 def login():
     st.subheader("Login")
-    user = cookie_manager.get(cookie="user")
-    if user and len(user) > 0:
-        st.session_state["user"] = user
-        data = get_user_data(user)
-        st.session_state["password"] = data[0][1]
-        st.session_state["key"] = data[0][2]
-        openai.api_key = data[0][2]
     if not is_user_logged_in():
         # new login
         with st.form("login"):
@@ -532,9 +511,10 @@ def login():
     result = login_user(st.session_state["user"], st.session_state["password"])
     # user could be logged in
     if result:
-        st.success("Logged In as {}".format(st.session_state["user"]))
-        cookie_manager.set("user", st.session_state["user"])  # Expires in a day by default
+        user = st.session_state["user"]
+        st.success("Logged In as {}".format(user))
         st.session_state["key"] = result[0][2]
+        openai.api_key = result[0][2]
         # change OpenAI API key
         if st.checkbox("change provided OpenAI API key"):
             key = st.text_input(
@@ -556,12 +536,11 @@ def login():
 
 
 def logout():
-    cookie_manager.delete("user")
-    cookie_manager.get_all()
     st.session_state["user"] = ""
     st.session_state["password"] = ""
     st.session_state["key"] = ""
     st.session_state["messages"] = []
+    st.session_state["messagesqanda"] = []
 
 
 def main():
@@ -575,7 +554,6 @@ def main():
         create_usertable()
         create_chattable()
         create_qandatable()
-        create_knowledgebase()
     if "knowledgebase" not in st.session_state.keys():
         # default knowledge base
         st.session_state["knowledgebase"] = "repo4euD21"

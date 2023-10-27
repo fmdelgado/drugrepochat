@@ -2,10 +2,15 @@ import mysql.connector
 
 # database and user have to be created first of all
 db_name = "data"
-user_db = "chat_bot"
-pw_db = "Pysg1eS8pR3SpD?nv}RW"
+user_db = "root"
+pw_db = "xxxxxxxx"
+host = "drugrepochatdb"
+#host = "localhost"
 
-conn = mysql.connector.connect(host='localhost', user=user_db, password=pw_db, database=db_name)
+conn = mysql.connector.connect(host=host, user=user_db, password=pw_db, port = 3306, ssl_disabled = True)
+c = conn.cursor(buffered=True)
+c.execute("CREATE DATABASE IF NOT EXISTS %s;", [db_name])
+conn = mysql.connector.connect(host=host, user=user_db, password=pw_db, database=db_name, port = 3306, ssl_disabled = True)
 c = conn.cursor(buffered=True)
 
 
@@ -14,13 +19,12 @@ def create_usertable():
     c.execute('CREATE TABLE IF NOT EXISTS userstable(user VARCHAR(100) PRIMARY KEY,password TEXT, apikey TEXT);')
 
 
-def create_knowledgebase():
-    c.execute('CREATE TABLE IF NOT EXISTS knowledgebase(user TEXT, name TEXT);')
-
 
 def create_chattable():
     c.execute(
         'CREATE TABLE IF NOT EXISTS chattable(rowid INTEGER auto_increment PRIMARY KEY,user TEXT, message TEXT, role TEXT);')
+
+    c.execute("ALTER TABLE chattable CONVERT TO CHARACTER SET utf8;")
 
 
 def create_qandatable():
@@ -32,10 +36,6 @@ def delete_chat(user):
     c.execute('DELETE FROM chattable WHERE user = %s;', [user])
     conn.commit()
 
-
-def delete_knowledgebase(user, name):
-    c.execute('DELETE FROM knowledgebase WHERE user = %s AND name= %s;', (user, name))
-    conn.commit()
 
 
 def delete_qanda(user):
@@ -58,21 +58,11 @@ def add_userdata(username, password, key):
     conn.commit()
 
 
-def add_knowledgebase(username, name):
-    c.execute('INSERT INTO knowledgebase(user, name) VALUES (%s , %s);', (username, name))
-    conn.commit()
-
-
 def get_chatdata(username):
     c.execute('SELECT * FROM chattable WHERE user = %s;', [username])
     data = c.fetchall()
     return data
 
-
-def get_knowledgebases_per_user(username):
-    c.execute('SELECT * FROM knowledgebase WHERE user = %s;', [username])
-    data = c.fetchall()
-    return data
 
 
 def get_qandadata(username):
