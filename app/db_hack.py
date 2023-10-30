@@ -16,6 +16,7 @@ from langchain.chat_models import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
 import markdown
 import hashlib
+from streamlit_option_menu import option_menu
 
 
 def get_api_key_if_missing():
@@ -239,28 +240,29 @@ def config_page():
 
     try:
         indices = []
-        indices_unfiltered = get_json("index-list.json")
-        for index in indices_unfiltered:
-            if index.startswith("index_") or index == "repo4euD21":
-                indices.append(index)
-            elif is_user_logged_in() and index.startswith(st.session_state["user"]+"_"):
-                indices.append(index)
-
+        public_knowledgebase = get_public_knowledgebase()
+        for knowledgebase in public_knowledgebase:
+            indices.append("index_" + knowledgebase[1])
+        if is_user_logged_in():
+            private_knowledgebases = get_private_knowledgebase(st.session_state["user"])
+            for knowledgebase in private_knowledgebases:
+                indices.append(st.session_state["user"] + "_" + knowledgebase[2])
     except Exception as e:
         # st.write(e)
         indices = []
 
     dip = indices + ["Create New"]
-    if not st.session_state["knowledgebase"] == "Create New":
-        chosen_base = dip.index(st.session_state["knowledgebase"])
+    if not st.session_state["knowledgebase"] == "Create New" and is_user_logged_in():
+        try:
+            chosen_base = dip.index(st.session_state["knowledgebase"])
+        except:
+            # knowledgebase might have been deleted etc.
+            chosen_base = 0
     else:
         # default
         chosen_base = 0
 
     st.session_state["knowledgebase"] = st.selectbox("Select knowledge base", options=dip, index=chosen_base)
-
-    # List of protected index names
-    protected_indices = ["repo4euD21"]
 
     if st.session_state["knowledgebase"] == "Create New":
         with st.form(key="index"):
@@ -283,13 +285,11 @@ def config_page():
                         if is_user_logged_in():
                             user_index = st.session_state["user"] + "_" + name
                             store_index_in_db(index, name=user_index)
-                            indices = indices + [user_index]
-                            store_data_as_json("index-list.json", indices)
+                            add_private_knowledgebase(st.session_state["user"], name)
                         else:
                             index_name = "index_" + name
                             store_index_in_db(index, name=index_name)
-                            indices = indices + [index_name]
-                            store_data_as_json("index-list.json", indices)
+                            add_public_knowledgebase(name, False)
                     st.success("Finished creating new index")
                     time.sleep(1)
                     st.experimental_rerun()
@@ -300,8 +300,10 @@ def config_page():
         delete = st.button("Delete")
 
         if delete:
+            data = st.session_state["knowledgebase"].split("_")
+            base_name = st.session_state["knowledgebase"][len(data[0]) + 1:]
             # Only delete the files if the index is not protected
-            if st.session_state["knowledgebase"] not in protected_indices:
+            if not check_if_public_knowledgebase_protected(base_name):
                 # Delete the files
                 pkl_file = f"indexes/{st.session_state['knowledgebase']}.pkl"
                 index_file = f"indexes/{st.session_state['knowledgebase']}.index"
@@ -310,10 +312,10 @@ def config_page():
                 if os.path.exists(index_file):
                     os.remove(index_file)
 
-                indices.remove(st.session_state["knowledgebase"])
-                store_data_as_json("index-list.json", indices)
-                data = st.session_state["knowledgebase"].split("_")
-                base_name = st.session_state["knowledgebase"][len(data[0]) + 1:]
+                if st.session_state["knowledgebase"].startswith("index_"):
+                    delete_public_knowledgebase(base_name)
+                else:
+                    delete_private_knowledgebase(st.session_state["user"], base_name)
                 st.success("Knowledgebase has been deleted successfully.")
                 time.sleep(1)
             else:
@@ -476,18 +478,23 @@ def about_page():
 
 def sign_up():
     st.subheader("Create an Account")
-    st.session_state["user"] = st.text_input('Username')
-    st.session_state["password"] = make_hashes(st.text_input('Password', type='password'))
-    st.session_state["key"] = st.text_input(
+    user = st.text_input('Username')
+    pw = make_hashes(st.text_input('Password', type='password'))
+    key = st.text_input(
         "Please, type in your OpenAI API key to continue", type="password", help="at least 10 characters required"
     )
-    if len(st.session_state["key"]) > 10:
+    if len(key) > 10:
+        st.session_state["user"] = user
+        st.session_state["password"] = pw
+        st.session_state["key"] = key
         openai.api_key = st.session_state["key"]
     else:
         st.warning("At least 10 characters are required for the API key!")
         st.stop()
-    if "_" in st.session_state["user"] or len(st.session_state["user"]) < 4 or len(st.session_state["password"]) < 4:
-        st.warning("You cannot use \"_\" in the username. Username and password need at least 4 digits.")
+    if "_" in st.session_state["user"] or len(st.session_state["user"]) < 4 or len(st.session_state["password"]) < 4 or \
+            st.session_state["user"].lower() == "index":
+        st.warning(
+            "You cannot use \"_\" in the username. Username and password need at least 4 digits. Index is a forbidden username!")
         st.stop()
     # signup possible if api key at least 10 characters long
     if st.button('SignUp'):
@@ -531,7 +538,8 @@ def login():
                 st.warning("At least 10 characters are required!")
                 st.stop()
     # Login failed
-    elif "user" in st.session_state.keys() and  "password" in st.session_state.keys() and len(st.session_state["user"]) > 0 and len(st.session_state["password"]) > 0:
+    elif "user" in st.session_state.keys() and "password" in st.session_state.keys() and len(
+            st.session_state["user"]) > 0 and len(st.session_state["password"]) > 0:
         st.error("Incorrect login!")
 
 
@@ -554,15 +562,14 @@ def main():
         create_usertable()
         create_chattable()
         create_qandatable()
+        create_knowledgebases_private()
+        create_knowledgebases_public()
     if "knowledgebase" not in st.session_state.keys():
         # default knowledge base
-        st.session_state["knowledgebase"] = "repo4euD21"
+        st.session_state["knowledgebase"] = "index_repo4euD21"
 
-    page = st.sidebar.selectbox(
-        "Choose a page",
-        ["Login", "Sign up", "Chatbot", "Q&A", "Configure knowledge base", "About"],
-    )
     with st.sidebar:
+        page = option_menu("Choose a page", ["Login", "Sign up", "Chatbot", "Q&A", "Configure knowledge base", "About"])
         if st.button("logout"):
             logout()
     if page == "Chatbot":
