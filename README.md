@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="https://github.com/fmdelgado/drugrepochat/blob/fix-bugs-db-update/app/img/logo.png" width="100"/>
+  <img src="https://github.com/fmdelgado/drugrepochat/blob/fix-bugs-db-update/app/img/logo.png" width="200"/>
 </p>
 
 # DrugRepoChatter: AI-Powered Assistant for Academic Research in Drug Discovery
