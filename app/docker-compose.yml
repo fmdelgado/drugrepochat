@@ -16,6 +16,3 @@ services:
     image: mysql:5.7
     environment:
       MYSQL_ROOT_PASSWORD: ${root_pw}
-
-volumes:
-  desmond2-eval-volume:

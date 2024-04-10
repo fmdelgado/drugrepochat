@@ -35,10 +35,5 @@ To configure the knowledge base, navigate to the "Configure Knowledge Base" page
 ## Installation
 
 1. Clone the repository.
-2. Install required packages: `pip install -r requirements.txt`
-3. Run `streamlit run db_hack.py`
-
-
-## Note
-
-This project uses Streamlit for the frontend and OpenAI for the backend. Please make sure you have both installed and properly configured.
+2. Navigate to the app directory.
+3. Run ```docker-compose --env-file env_drugrepochat.env up```

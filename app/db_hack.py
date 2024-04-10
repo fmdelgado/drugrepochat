@@ -4,9 +4,10 @@ import streamlit as st
 import openai
 import sys
 
+sys.path.append('/Users/fernando/Documents/Research/drugrepochat/app')
+
 from my_pdf_lib import load_index_from_db, store_index_in_db, get_index_for_pdf
 
-sys.path.append('/Users/fernando/Documents/Research/drugrepochat/app')
 from db_management import *
 from db_chat import user_message, bot_message
 import json
@@ -18,6 +19,7 @@ import markdown
 import hashlib
 from streamlit_option_menu import option_menu
 
+from langchain.prompts import PromptTemplate
 
 def get_api_key_if_missing():
     # when no user logged in: application can be used by only giving an API key
@@ -78,7 +80,7 @@ def get_available_models():
 
 
 def chat_page_styling():
-    st.title("Academate")
+    st.title("DrugRepoChatter")
     st.header("Questions and  Answering Chatbot")
     st.write(
         """
@@ -87,7 +89,6 @@ def chat_page_styling():
            it can provide detailed insights and answers to your queries! 📚
 
            To customize the knowledge base, please navigate to the *Configure Knowledge Base* page.
-
             """
     )
 
@@ -123,7 +124,7 @@ def print_current_chat(typeOfChat):
         if message["role"] == "user":
             user_message(message["content"])
         elif message["role"] == "assistant":
-            bot_message(message["content"], bot_name="Academate")
+            bot_message(message["content"], bot_name="DrugRepoChatter")
 
 
 def clear_chat(typeOfChat):
@@ -175,7 +176,7 @@ def chat_page():
     if prompt:
         with st.container():
             user_message(prompt)
-            botmsg = bot_message("...", bot_name="Academate")
+            botmsg = bot_message("...", bot_name="DrugRepoChatter")
 
         try:
             # add context of the knowledge base to the messages
@@ -341,6 +342,8 @@ def qanda_page():
 
     available_models = get_available_models()
     selected_model = st.selectbox("Please select a model", options=available_models)
+    default_temp = 0.0
+    selected_temp = st.slider("temp", min_value=0.0, max_value=1.0, value=default_temp, step=0.1, format="%.1f")
 
     chaintype = st.selectbox("Please select chain type", options=['stuff', "map_reduce", "refine"], index=0)
     default_k = 4
@@ -349,11 +352,14 @@ def qanda_page():
     selected_fetch_k = st.slider("fetch_k", min_value=1, max_value=50, value=default_fetch_k, step=1)
     show_sources = st.checkbox("Show texts in original docs", False)
 
-    st.title("Academate")
+    st.title("DrugRepoChatter")
     st.header("Questions and Answering with sources")
 
     if "knowledgebase" in st.session_state.keys() and len(st.session_state["knowledgebase"]) > 0:
         index = load_index_from_db(st.session_state["knowledgebase"])
+        index = load_index_from_db("index_repo4euD21")
+
+
     else:
         st.info("No knowledge base found. Please configure one!")
         st.stop()
@@ -366,35 +372,33 @@ def qanda_page():
     if prompt:
         with st.container():
             user_message(prompt)
-            botmsg = bot_message("...", bot_name="Academate")
+            botmsg = bot_message("...", bot_name="DrugRepoChatter")
 
         # response possible because the API key was valid
         if openai.api_key and len(available_models) > 0:
             try:
 
-                formatted_prompt = ChatPromptTemplate(
-                    messages=[
-                        HumanMessagePromptTemplate.from_template("""You are great at answering questions about a given \
-                                                                    database in a technical but easy to understand manner. 
-                                                                    If you cannot find a direct answer to the question in \
-                                                                    the documents I gave you, you must say "In your provided \
-                                                                    context i don't know the answer to your question". \
-                                                                    When you don't know the answer to a question you admit \
-                                                                    that you don't know. Here is a question:\
-                                                                    {user_prompt}""")
-                    ],
-                    input_variables=["user_prompt"])
+                PROMPT_TEMPLATE = """Answer the question based only on the following context:\
+                                    {context}\
+                                    You are allowed to rephrase the answer based on the context. \
+                                    Do not answer any questions using your pre-trained knowledge, only use the information provided in the context.\
+                                    Do not answer any questions that do not relate to drug repurposing, omics data, bioinformatics and data anlaysis.\
+                                    Question: {question}
+                                  """
+                PROMPT = PromptTemplate.from_template(PROMPT_TEMPLATE)
 
-                # Create the chain to answer questions
+                # tag::qa[]
                 qa_chain = RetrievalQA.from_chain_type(
                     llm=ChatOpenAI(temperature=0.0, model=selected_model, openai_api_key=openai.api_key),
                     chain_type=chaintype,
+                    chain_type_kwargs={"prompt": PROMPT},
                     retriever=index.as_retriever(search_type="mmr",
                                                  search_kwargs={'fetch_k': selected_fetch_k,
                                                                 'k': selected_k}),
-                    return_source_documents=True,
-                    verbose=True)
-                llm_response = qa_chain(formatted_prompt.format_prompt(user_prompt=prompt).to_string())
+                    return_source_documents=True
+                )
+
+                llm_response = qa_chain({"query": prompt})
 
                 # text = f"{llm_response['result']}\nSources:\n{process_llm_response(llm_response, doc_content=showdocs)}"
                 # Convert Markdown to HTML
@@ -429,10 +433,10 @@ def qanda_page():
 
 def visualize_index_page():
     st.markdown(
-        f'<p align="center"> <img src="https://github.com/fmdelgado/DRACOONpy/raw/master/img/academate_logo.png" width="300"/> </p>',
+        f'<p align="center"> <img src="https://github.com/fmdelgado/DRACOONpy/raw/master/img/DrugRepoChatter_logo.png" width="300"/> </p>',
         unsafe_allow_html=True,
     )
-    st.title("Academate")
+    st.title("DrugRepoChatter")
     st.header("AI-powered assistant for academic research")
 
     st.markdown("""
@@ -446,15 +450,15 @@ def visualize_index_page():
 
 def about_page():
     st.markdown(
-        f'<p align="center"> <img src="https://github.com/fmdelgado/DRACOONpy/raw/master/img/academate_logo.png" width="300"/> </p>',
+        f'<p align="center"> <img src="img/logo.png" width="300"/> </p>',
         unsafe_allow_html=True,
     )
-    st.title("Academate")
+    st.title("DrugRepoChatter")
     st.header("AI-powered assistant for academic research")
 
     st.markdown("""
-    Academate is an AI-powered assistant for academic research. It is a tool that helps researchers to find relevant information in a large corpus of scientific documents.
-    To begin, just upload your PDF files and Academate will create a knowledge base that you can query using natural language. 
+    DrugRepoChatter is an AI-powered assistant for academic research. It is a tool that helps researchers to find relevant information in a large corpus of scientific documents.
+    To begin, just upload your PDF files and DrugRepoChatter will create a knowledge base that you can query using natural language. 
         """)
 
     st.markdown(
