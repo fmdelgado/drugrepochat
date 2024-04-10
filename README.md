@@ -1,25 +1,13 @@
 
 <p align="center">
-  <img src="https://github.com/fmdelgado/DRACOONpy/raw/master/img/academate_logo.png" width="100"/>
+  <img src="https://github.com/fmdelgado/drugrepochat/blob/fix-bugs-db-update/app/img/logo.png" width="100"/>
 </p>
 
-# Academate: AI-Powered Assistant for Academic Research (Under Construction 🚧)
+# DrugRepoChatter: AI-Powered Assistant for Academic Research in Drug Discovery
 
 ## Description
 
-Academate aims to assist researchers in finding relevant information within a large corpus of scientific documents. The application is currently under construction as we strive to offer a seamless and efficient user experience.
-
-## Key Features (Under Construction)
-
-- **User-friendly Interface**: An intuitive chat interface for querying the knowledge base.
-- **Advanced NLP Algorithms**: Utilizing cutting-edge algorithms for natural language processing to provide insightful and accurate responses.
-
-## Usage
-
-1. Run the Python script.
-2. Navigate using the sidebar to the various functionalities.
-3. On the main page, you can type your question to query the knowledge base.
-4. The application will provide a response based on the existing or configured knowledge base.
+DrugRepoChatter aims to assist researchers in finding relevant information within a large corpus of scientific documents.
 
 ## Configuration
 

@@ -433,7 +433,7 @@ def qanda_page():
 
 def visualize_index_page():
     st.markdown(
-        f'<p align="center"> <img src="https://github.com/fmdelgado/DRACOONpy/raw/master/img/DrugRepoChatter_logo.png" width="300"/> </p>',
+        f'<p align="center"> <img src="https://github.com/fmdelgado/drugrepochat/blob/fix-bugs-db-update/app/img/logo.png" width="300"/> </p>',
         unsafe_allow_html=True,
     )
     st.title("DrugRepoChatter")
