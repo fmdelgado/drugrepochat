@@ -1,29 +1,19 @@
 import os
 import streamlit as st
-
 import re
 import time
 from io import BytesIO
 from typing import Any, Dict, List
 import pickle
-
 from langchain.docstore.document import Document
 from langchain.document_loaders import PyPDFLoader
-from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.vectorstores.faiss import FAISS
+from langchain_community.vectorstores import FAISS
 from pypdf import PdfReader
 import faiss
+from ollama_connector import ollama_embeddings
+# where to  import user/password asnd so on? to connect ot the ur?
 
-
-def write_file(filename, content):
-    with open("indexes/" + filename, 'wb') as file:
-        file.write(content)
-
-
-def read_file(filename):
-    with open("indexes/" + filename, 'rb') as file:
-        return file.read()
 
 
 def parse_pdf(file: BytesIO) -> List[str]:
@@ -60,7 +50,7 @@ def text_to_docs(text: str, filename: str) -> List[Document]:
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=4000,
             separators=["\n\n", "\n", ".", "!", "?", ",", " ", ""],
-            chunk_overlap=0,
+            chunk_overlap=100,
         )
         chunks = text_splitter.split_text(doc.page_content)
         for i, chunk in enumerate(chunks):
@@ -73,39 +63,21 @@ def text_to_docs(text: str, filename: str) -> List[Document]:
     return doc_chunks
 
 
-def docs_to_index(docs, openai_api_key):
-    index = FAISS.from_documents(
-        docs, OpenAIEmbeddings(openai_api_key=openai_api_key)
-    )  # Create a searchable index of the chunks
-
-    return index
-
-
-def get_index_for_pdf(pdf_files, openai_api_key):
+def get_index_for_pdf(pdf_files):
     documents = []
     for pdf_file in pdf_files:
         text = parse_pdf(BytesIO(pdf_file.getvalue()))  # Extract text from the pdf
         filename = pdf_file.name  # Get the filename
         documents = documents + text_to_docs(text, filename)  # Divide the text up into chunks
 
-    index = docs_to_index(documents, openai_api_key)
-
+    index = FAISS.from_documents(documents, ollama_embeddings)
     return index
 
 
 def store_index_in_db(index, name):
-    faiss.write_index(index.index, "indexes/docs.index")
-    # Open the file and dump to local storage
-    write_file(f"{name}.index", read_file("docs.index"))
-    index.index = None
-    write_file(f"{name}.pkl", pickle.dumps(index))
+    index.save_local(f"indexes/{name}")
 
 
 def load_index_from_db(index_name):
-    findex = read_file(f"{index_name}.index")
-    write_file("docs.index", findex)
-    index = faiss.read_index("indexes/docs.index")
-    VectorDB = pickle.loads(read_file(f"{index_name}.pkl"))
-    VectorDB.index = index
-
-    return VectorDB
+    index = FAISS.load_local(f"indexes/{index_name}", ollama_embeddings, allow_dangerous_deserialization=True)
+    return index

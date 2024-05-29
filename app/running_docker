@@ -1,0 +1,9 @@
+docker stop drugrepochat
+docker rm drugrepochat
+docker system prune -a
+docker volume prune
+docker image prune
+docker container prune
+
+
+docker-compose up --build

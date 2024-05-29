@@ -1,45 +1,26 @@
 import time
-
 import streamlit as st
 import openai
 import sys
 
 sys.path.append('/Users/fernando/Documents/Research/drugrepochat/app')
-
 from my_pdf_lib import load_index_from_db, store_index_in_db, get_index_for_pdf
-
 from db_management import *
 from db_chat import user_message, bot_message
 import json
 import os
 from langchain.chains import RetrievalQA
-from langchain.chat_models import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
 import markdown
 import hashlib
 from streamlit_option_menu import option_menu
-
+from ollama_connector import ollama_embeddings, ollama_llm
 from langchain.prompts import PromptTemplate
-
-def get_api_key_if_missing():
-    # when no user logged in: application can be used by only giving an API key
-    if api_key_missing():
-        st.session_state["key"] = st.text_input(
-            "Please, type in your OpenAI API key to continue", type="password", help="at least 10 characters required"
-        )
-        if len(st.session_state.key) > 10:
-            openai.api_key = st.session_state["key"]
-        else:
-            st.warning("At least 10 characters are required!")
-            st.stop()
 
 
 def is_user_logged_in():
     return "user" in st.session_state.keys() and len(st.session_state["user"]) > 0
 
-
-def api_key_missing():
-    return "key" not in st.session_state.keys() or len(st.session_state["key"]) == 0 or not openai.api_key
 
 
 def make_hashes(password):
@@ -57,26 +38,6 @@ def store_data_as_json(file_name, data):
         json.dump(data, file)
 
 
-def get_openai_models():
-    models = openai.Model.list()
-    dict_list = [elem for elem in models.data if elem["object"] == "model"]
-    contains_gpt_4 = any(d['id'] == "gpt-4" for d in dict_list)
-    if contains_gpt_4:
-        available_models = ["gpt-3.5-turbo", 'gpt-4']
-    else:
-        available_models = ["gpt-3.5-turbo"]
-    return available_models
-
-
-def get_available_models():
-    # try to get available models to see if API key is valid
-    try:
-        available_models = get_openai_models()
-    except Exception as e:
-        # st.write(e)
-        st.error("Your provided OpenAI API key is not valid.")
-        available_models = []
-    return available_models
 
 
 def chat_page_styling():
@@ -155,11 +116,6 @@ def get_user_message(typeOfChat):
 
 
 def chat_page():
-    get_api_key_if_missing()
-
-    available_models = get_available_models()
-
-    selected_model = st.selectbox("Please select a model", options=available_models)
     chat_page_styling()
 
     reproduce_chat_if_user_logged_in("messages")
@@ -194,31 +150,26 @@ def chat_page():
 
         response = []
         result = ""
-        # response possible because the API key was valid
-        if openai.api_key and len(available_models) > 0:
-            try:
+        try:
+            for chunk in ollama_llm:
+                text = chunk.choices[0].get("delta", {}).get("content")
+                if text is not None:
+                    response.append(text)
+                    result = "".join(response).strip()
 
-                for chunk in openai.ChatCompletion.create(
-                        model=selected_model, messages=st.session_state["messages"], temperature=0, stream=True
-                ):
-                    text = chunk.choices[0].get("delta", {}).get("content")
-                    if text is not None:
-                        response.append(text)
-                        result = "".join(response).strip()
+                    botmsg.update(result)
+            message = {"role": "assistant", "content": result}
+            st.session_state["messages"].append(message)
+            if is_user_logged_in():
+                save_message_in_db("messages", message)
 
-                        botmsg.update(result)
-                message = {"role": "assistant", "content": result}
-                st.session_state["messages"].append(message)
-                if is_user_logged_in():
-                    save_message_in_db("messages", message)
-            except Exception as e:
-                # st.write(e)
-                st.error("Something went wrong while producing a response.")
-        # no response possible because the API key was not valid -> failure message
+        except Exception as e:
+            # st.write(e)
+            st.error("Something went wrong while producing a response.")
         else:
             failure_message = """
-            Hi there. You haven't provided me with an OpenAI API key that I can use. 
-            Please provide a key, so we can start chatting!
+            Hi there. You haven't provided me with a correct LLM endpoint that I can use. 
+            Please provide one, so we can start chatting!
             """
             message = {"role": "assistant", "content": failure_message}
             st.session_state["messages"].append(message)
@@ -231,10 +182,6 @@ def chat_page():
 
 
 def config_page():
-    get_api_key_if_missing()
-
-    get_available_models()
-
     st.title("Configure knowledge base")
     if not is_user_logged_in():
         st.warning("You are not logged in. Newly created knowledge bases will be available for everyone.")
@@ -282,7 +229,7 @@ def config_page():
             if button:
                 try:
                     with st.spinner("Indexing"):
-                        index = get_index_for_pdf(files, openai_api_key=st.session_state["key"])
+                        index = get_index_for_pdf(files)
                         if is_user_logged_in():
                             user_index = st.session_state["user"] + "_" + name
                             store_index_in_db(index, name=user_index)
@@ -296,7 +243,7 @@ def config_page():
                     st.experimental_rerun()
                 except Exception as e:
                     # st.write(e)
-                    st.error("Could not create new index. Check your OpenAI API key.")
+                    st.error("Could not create new index.")
     else:
         delete = st.button("Delete")
 
@@ -338,13 +285,6 @@ def process_llm_response(llm_response, doc_content=True):
 
 
 def qanda_page():
-    get_api_key_if_missing()
-
-    available_models = get_available_models()
-    selected_model = st.selectbox("Please select a model", options=available_models)
-    default_temp = 0.0
-    selected_temp = st.slider("temp", min_value=0.0, max_value=1.0, value=default_temp, step=0.1, format="%.1f")
-
     chaintype = st.selectbox("Please select chain type", options=['stuff', "map_reduce", "refine"], index=0)
     default_k = 4
     selected_k = st.slider("k", min_value=1, max_value=50, value=default_k, step=1)
@@ -357,7 +297,7 @@ def qanda_page():
 
     if "knowledgebase" in st.session_state.keys() and len(st.session_state["knowledgebase"]) > 0:
         index = load_index_from_db(st.session_state["knowledgebase"])
-        index = load_index_from_db("index_repo4euD21")
+        index = load_index_from_db("repo4euD21openaccess")
 
 
     else:
@@ -374,53 +314,50 @@ def qanda_page():
             user_message(prompt)
             botmsg = bot_message("...", bot_name="DrugRepoChatter")
 
-        # response possible because the API key was valid
-        if openai.api_key and len(available_models) > 0:
-            try:
+        try:
 
-                PROMPT_TEMPLATE = """Answer the question based only on the following context:\
-                                    {context}\
-                                    You are allowed to rephrase the answer based on the context. \
-                                    Do not answer any questions using your pre-trained knowledge, only use the information provided in the context.\
-                                    Do not answer any questions that do not relate to drug repurposing, omics data, bioinformatics and data anlaysis.\
-                                    Question: {question}
-                                  """
-                PROMPT = PromptTemplate.from_template(PROMPT_TEMPLATE)
+            PROMPT_TEMPLATE = """Answer the question based only on the following context:\
+                                {context}\
+                                You are allowed to rephrase the answer based on the context. \
+                                Do not answer any questions using your pre-trained knowledge, only use the information provided in the context.\
+                                Do not answer any questions that do not relate to drug repurposing, omics data, bioinformatics and data anlaysis.\
+                                Question: {question}
+                              """
+            PROMPT = PromptTemplate.from_template(PROMPT_TEMPLATE)
 
-                # tag::qa[]
-                qa_chain = RetrievalQA.from_chain_type(
-                    llm=ChatOpenAI(temperature=0.0, model=selected_model, openai_api_key=openai.api_key),
-                    chain_type=chaintype,
-                    chain_type_kwargs={"prompt": PROMPT},
-                    retriever=index.as_retriever(search_type="mmr",
-                                                 search_kwargs={'fetch_k': selected_fetch_k,
-                                                                'k': selected_k}),
-                    return_source_documents=True
-                )
+            # tag::qa[]
+            qa_chain = RetrievalQA.from_chain_type(
+                llm=ollama_llm,
+                chain_type=chaintype,
+                chain_type_kwargs={"prompt": PROMPT},
+                retriever=index.as_retriever(search_type="mmr",
+                                             search_kwargs={'fetch_k': selected_fetch_k,
+                                                            'k': selected_k}),
+                return_source_documents=True
+            )
 
-                llm_response = qa_chain({"query": prompt})
+            llm_response = qa_chain({"query": prompt})
 
-                # text = f"{llm_response['result']}\nSources:\n{process_llm_response(llm_response, doc_content=showdocs)}"
-                # Convert Markdown to HTML
-                html_content = markdown.markdown(llm_response['result'])
-                if "In your provided context i don" in llm_response['result']:
-                    text = f"{html_content}"
-                else:
-                    text = f"{html_content}<br><strong>Sources:</strong><br>{process_llm_response(llm_response, doc_content=show_sources)}"
-                result = "".join(text).strip()
-                botmsg.update(result)
-                message = {"role": "assistant", "content": result}
-                st.session_state["messagesqanda"].append(message)
-                if is_user_logged_in():
-                    save_message_in_db("messagesqanda", message)
-            except Exception as e:
-                # st.write(e)
-                st.error("Something went wrong while producing a response.")
-        # no response possible because the API key was not valid -> failure message
+            # text = f"{llm_response['result']}\nSources:\n{process_llm_response(llm_response, doc_content=showdocs)}"
+            # Convert Markdown to HTML
+            html_content = markdown.markdown(llm_response['result'])
+            if "In your provided context i don" in llm_response['result']:
+                text = f"{html_content}"
+            else:
+                text = f"{html_content}<br><strong>Sources:</strong><br>{process_llm_response(llm_response, doc_content=show_sources)}"
+            result = "".join(text).strip()
+            botmsg.update(result)
+            message = {"role": "assistant", "content": result}
+            st.session_state["messagesqanda"].append(message)
+            if is_user_logged_in():
+                save_message_in_db("messagesqanda", message)
+        except Exception as e:
+            # st.write(e)
+            st.error("Something went wrong while producing a response.")
         else:
             failure_message = """
-                        Hi there. You haven't provided me with an OpenAI API key that I can use. 
-                        Please provide a key, so we can start chatting!
+                        Hi there. You haven't provided me with a valid LLM endpoint that I can use. 
+                        Please provide one, so we can start chatting!
                         """
             message = {"role": "assistant", "content": failure_message}
             st.session_state["messagesqanda"].append(message)
@@ -484,23 +421,18 @@ def sign_up():
     st.subheader("Create an Account")
     user = st.text_input('Username')
     pw = make_hashes(st.text_input('Password', type='password'))
-    key = st.text_input(
-        "Please, type in your OpenAI API key to continue", type="password", help="at least 10 characters required"
-    )
-    if len(key) > 10:
+
+    if len(pw) > 5:
         st.session_state["user"] = user
         st.session_state["password"] = pw
-        st.session_state["key"] = key
-        openai.api_key = st.session_state["key"]
     else:
-        st.warning("At least 10 characters are required for the API key!")
+        st.warning("At least 5 characters are required for the password!")
         st.stop()
     if "_" in st.session_state["user"] or len(st.session_state["user"]) < 4 or len(st.session_state["password"]) < 4 or \
             st.session_state["user"].lower() == "index":
         st.warning(
             "You cannot use \"_\" in the username. Username and password need at least 4 digits. Index is a forbidden username!")
         st.stop()
-    # signup possible if api key at least 10 characters long
     if st.button('SignUp'):
         # user does not exist yet and can be created
         if check_if_user_already_exists(st.session_state["user"]):
@@ -525,22 +457,7 @@ def login():
         user = st.session_state["user"]
         st.success("Logged In as {}".format(user))
         st.session_state["key"] = result[0][2]
-        openai.api_key = result[0][2]
-        # change OpenAI API key
-        if st.checkbox("change provided OpenAI API key"):
-            key = st.text_input(
-                "Please, type in your OpenAI API key to continue", type="password",
-                help="at least 10 characters required"
-            )
 
-            if len(key) > 10:
-                st.session_state["key"] = key
-                openai.api_key = st.session_state["key"]
-                update_key(st.session_state["key"], st.session_state["user"])
-                st.success("Your OpenAI API key has been changed successfully!")
-            else:
-                st.warning("At least 10 characters are required!")
-                st.stop()
     # Login failed
     elif "user" in st.session_state.keys() and "password" in st.session_state.keys() and len(
             st.session_state["user"]) > 0 and len(st.session_state["password"]) > 0:
@@ -570,7 +487,7 @@ def main():
         create_knowledgebases_public()
     if "knowledgebase" not in st.session_state.keys():
         # default knowledge base
-        st.session_state["knowledgebase"] = "index_repo4euD21"
+        st.session_state["knowledgebase"] = "repo4euD21openaccess"
 
     with st.sidebar:
         page = option_menu("Choose a page", ["Login", "Sign up", "Chatbot", "Q&A", "Configure knowledge base", "About"])
