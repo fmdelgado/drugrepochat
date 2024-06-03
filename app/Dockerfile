@@ -1,9 +1,9 @@
 # Use an official Python runtime as a parent image
 FROM python:3.8-slim-buster
 
-ENV root_pw=Lisa@123
-ENV port_mapping=5001:8501
-ENV MYSQL_ROOT_PASSWORD=Lisa@123
+ENV root_pw=${root_pw}
+ENV port_mapping=${port_mapping}
+ENV MYSQL_ROOT_PASSWORD=${mysql_root_pw}
 
 # Set the working directory in the container to /app
 WORKDIR /app

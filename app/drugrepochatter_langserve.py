@@ -23,6 +23,12 @@ import requests, json
 from langchain_community.vectorstores import FAISS
 from langchain_community.llms import Ollama
 from langchain_community.embeddings import OllamaEmbeddings
+import os
+from os.path import join, dirname
+
+from dotenv import load_dotenv
+dotenv_path = join(dirname(__file__), '.env')
+load_dotenv(dotenv_path)
 
 app = FastAPI(
     title="DrugRepoChatter Server",
@@ -48,16 +54,18 @@ PROMPT_TEMPLATE = """Answer the question based only on the following context:
                     Question: {question}
                   """
 PROMPT = PromptTemplate.from_template(PROMPT_TEMPLATE)
-protocol = "https"
-hostname = "chat.cosy.bio"
+protocol = os.getenv('protocol_ollama')
+hostname = os.getenv('hostname_ollama')
 host = f"{protocol}://{hostname}"
-auth_url = f"{host}/api/v1/auths/signin"
-api_url = f"{host}/ollama"
-account = {'email': "drugrepochatter@mailinator.com", 'password': "DrugRepoChatter"}
+suffix = os.getenv('auth_url_suffix_ollama')
+auth_url = f"{host}/{suffix}"
+suffix = os.getenv('api_url_suffix_ollama')
+api_url = f"{host}/{suffix}"
+account = {'email': os.getenv('ollama_user'), 'password': os.getenv('ollama_pw')}
 auth_response = requests.post(auth_url, json=account)
 jwt = json.loads(auth_response.text)["token"]
 
-modelname = 'llama3'
+modelname = os.getenv('ollama_model')
 selected_fetch_k = 20
 selected_k = 3
 path_name = "/Users/fernando/Documents/Research/drugrepochat/app/indexes/repo4euD21openaccess"

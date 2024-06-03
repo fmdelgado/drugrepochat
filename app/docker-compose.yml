@@ -7,8 +7,15 @@ services:
     links:
       - "db"
     build: .
+    env_file:
+      - .env
     ports:
       - ${port_mapping}
+    depends_on:
+      - db
+    volumes:
+      - index_volume:/app/indexes
+
 
   db:
     container_name: drugrepochatdb
@@ -16,3 +23,7 @@ services:
     image: mysql:5.7
     environment:
       MYSQL_ROOT_PASSWORD: ${root_pw}
+
+volumes:
+  index_volume:
+    driver: local

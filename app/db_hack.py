@@ -1,6 +1,5 @@
 import time
 import streamlit as st
-import openai
 import sys
 
 sys.path.append('/Users/fernando/Documents/Research/drugrepochat/app')
@@ -16,6 +15,10 @@ import hashlib
 from streamlit_option_menu import option_menu
 from ollama_connector import ollama_embeddings, ollama_llm
 from langchain.prompts import PromptTemplate
+import time
+
+MAX_REQUESTS = 10
+WAIT_TIME = 60 # seconds
 
 
 def is_user_logged_in():
@@ -123,7 +126,17 @@ def chat_page():
     start_new_chat_if_empty("messages")
 
     print_current_chat("messages")
+    
+    if st.session_state.lock_until > time.time():
+        st.write(f"You have reached your limit of {MAX_REQUESTS} questions. Please wait {int(st.session_state.lock_until - time.time())} seconds.")
+        st.session_state.request_count = 0
+        return
+    
+    st.session_state.request_count += 1  
 
+    if st.session_state.request_count > MAX_REQUESTS:
+        st.session_state.lock_until = time.time() + WAIT_TIME  
+        
     index = load_index_from_db(st.session_state["knowledgebase"])
 
     prompt = get_user_message("messages")
@@ -164,7 +177,7 @@ def chat_page():
                 save_message_in_db("messages", message)
 
         except Exception as e:
-            # st.write(e)
+            st.write(e)
             st.error("Something went wrong while producing a response.")
         else:
             failure_message = """
@@ -252,13 +265,11 @@ def config_page():
             base_name = st.session_state["knowledgebase"][len(data[0]) + 1:]
             # Only delete the files if the index is not protected
             if not check_if_public_knowledgebase_protected(base_name):
+                folder = f"indexes/{st.session_state['knowledgebase']}"
                 # Delete the files
-                pkl_file = f"indexes/{st.session_state['knowledgebase']}.pkl"
-                index_file = f"indexes/{st.session_state['knowledgebase']}.index"
-                if os.path.exists(pkl_file):
-                    os.remove(pkl_file)
-                if os.path.exists(index_file):
-                    os.remove(index_file)
+                import shutil
+                if os.path.exists(folder):
+                    shutil.rmtree(folder)
 
                 if st.session_state["knowledgebase"].startswith("index_"):
                     delete_public_knowledgebase(base_name)
@@ -297,7 +308,6 @@ def qanda_page():
 
     if "knowledgebase" in st.session_state.keys() and len(st.session_state["knowledgebase"]) > 0:
         index = load_index_from_db(st.session_state["knowledgebase"])
-        index = load_index_from_db("repo4euD21openaccess")
 
 
     else:
@@ -307,6 +317,17 @@ def qanda_page():
     reproduce_chat_if_user_logged_in("messagesqanda")
     start_new_chat_if_empty("messagesqanda")
     print_current_chat("messagesqanda")
+    
+     
+    if st.session_state.lock_until_qanda > time.time():
+        st.write(f"You have reached your limit of {MAX_REQUESTS} questions. Please wait {int(st.session_state.lock_until_qanda - time.time())} seconds.")
+        st.session_state.request_count_qanda = 0
+        return
+    
+    st.session_state.request_count_qanda += 1  
+
+    if st.session_state.request_count_qanda > MAX_REQUESTS:
+        st.session_state.lock_until_qanda = time.time() + WAIT_TIME 
 
     prompt = get_user_message("messagesqanda")
     if prompt:
@@ -354,16 +375,6 @@ def qanda_page():
         except Exception as e:
             # st.write(e)
             st.error("Something went wrong while producing a response.")
-        else:
-            failure_message = """
-                        Hi there. You haven't provided me with a valid LLM endpoint that I can use. 
-                        Please provide one, so we can start chatting!
-                        """
-            message = {"role": "assistant", "content": failure_message}
-            st.session_state["messagesqanda"].append(message)
-            botmsg.update(failure_message)
-            if is_user_logged_in():
-                save_message_in_db("messagesqanda", message)
     if len(st.session_state["messagesqanda"]) != 0 and st.button("Clear Chat"):
         clear_chat("messagesqanda")
 
@@ -426,7 +437,7 @@ def sign_up():
         st.session_state["user"] = user
         st.session_state["password"] = pw
     else:
-        st.warning("At least 5 characters are required for the password!")
+        st.warning("At least 4 characters are required for the password!")
         st.stop()
     if "_" in st.session_state["user"] or len(st.session_state["user"]) < 4 or len(st.session_state["password"]) < 4 or \
             st.session_state["user"].lower() == "index":
@@ -485,9 +496,17 @@ def main():
         create_qandatable()
         create_knowledgebases_private()
         create_knowledgebases_public()
+        if 'request_count' not in st.session_state:
+            st.session_state.request_count = 0
+        if 'lock_until' not in st.session_state:
+            st.session_state.lock_until = 0
+        if 'request_count_qanda' not in st.session_state:
+            st.session_state.request_count_qanda = 0
+        if 'lock_until_qanda' not in st.session_state:
+            st.session_state.lock_until_qanda = 0
     if "knowledgebase" not in st.session_state.keys():
         # default knowledge base
-        st.session_state["knowledgebase"] = "repo4euD21openaccess"
+        st.session_state["knowledgebase"] = "index_repo4euD21openaccess"
 
     with st.sidebar:
         page = option_menu("Choose a page", ["Login", "Sign up", "Chatbot", "Q&A", "Configure knowledge base", "About"])

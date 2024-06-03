@@ -6,11 +6,11 @@ dotenv_path = join(dirname(__file__), '.env')
 load_dotenv(dotenv_path)
 
 # database and user have to be created first of all
-db_name = "data"
-user_db = "root"
-pw_db = os.environ.get("root_pw")
-host = "drugrepochatdb"
-#host = "localhost"
+db_name = os.getenv('db_name')
+user_db = os.getenv('user')
+pw_db = db_password = os.getenv('root_pw')
+host = os.getenv('host')
+
 
 conn = mysql.connector.connect(host=host, user=user_db, password=pw_db, port = 3306, ssl_disabled = True)
 c = conn.cursor(buffered=True)
@@ -43,8 +43,8 @@ def create_knowledgebases_public():
     c.execute(
         'CREATE TABLE IF NOT EXISTS knowledgebases_public(rowid INTEGER auto_increment PRIMARY KEY, knowledgebase VARCHAR(100), protected boolean);')
     #add protected database
-    if check_if_public_knowledgebase_already_exists("repo4euD21"):
-        add_public_knowledgebase("repo4euD21", True)
+    if check_if_public_knowledgebase_already_exists("repo4euD21openaccess"):
+        add_public_knowledgebase("index_repo4euD21openaccess", True)
 
 
 def delete_chat(user):
