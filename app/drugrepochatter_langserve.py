@@ -68,7 +68,7 @@ jwt = json.loads(auth_response.text)["token"]
 modelname = os.getenv('ollama_model')
 selected_fetch_k = 20
 selected_k = 3
-path_name = "/Users/fernando/Documents/Research/drugrepochat/app/indexes/repo4euD21openaccess"
+path_name = "/app/indexes/index_repo4euD21openaccess"
 
 ollama_embeddings = OllamaEmbeddings(base_url=api_url, model="nomic-embed-text", headers={"Authorization": "Bearer " + jwt})
 ollama_llm = Ollama(base_url=api_url, model=modelname, temperature=0.0, headers={"Authorization": "Bearer " + jwt})

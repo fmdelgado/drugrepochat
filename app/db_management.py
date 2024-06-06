@@ -14,6 +14,8 @@ host = os.getenv('host')
 
 conn = mysql.connector.connect(host=host, user=user_db, password=pw_db, port = 3306, ssl_disabled = True)
 c = conn.cursor(buffered=True)
+
+
 #c.execute('DROP DATABASE data;')
 c.execute('CREATE DATABASE IF NOT EXISTS %s CHARACTER SET utf8 COLLATE utf8_bin;' % db_name)
 conn = mysql.connector.connect(host=host, user=user_db, password=pw_db, database=db_name, port = 3306, ssl_disabled = True)
@@ -43,7 +45,7 @@ def create_knowledgebases_public():
     c.execute(
         'CREATE TABLE IF NOT EXISTS knowledgebases_public(rowid INTEGER auto_increment PRIMARY KEY, knowledgebase VARCHAR(100), protected boolean);')
     #add protected database
-    if check_if_public_knowledgebase_already_exists("repo4euD21openaccess"):
+    if check_if_public_knowledgebase_already_exists("index_repo4euD21openaccess"):
         add_public_knowledgebase("index_repo4euD21openaccess", True)
 
 

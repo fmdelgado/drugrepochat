@@ -1,13 +1,10 @@
 import time
 import streamlit as st
 import sys
-
-sys.path.append('/Users/fernando/Documents/Research/drugrepochat/app')
 from my_pdf_lib import load_index_from_db, store_index_in_db, get_index_for_pdf
 from db_management import *
 from db_chat import user_message, bot_message
 import json
-import os
 from langchain.chains import RetrievalQA
 from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
 import markdown
@@ -16,6 +13,14 @@ from streamlit_option_menu import option_menu
 from ollama_connector import ollama_embeddings, ollama_llm
 from langchain.prompts import PromptTemplate
 import time
+import os
+import base64
+
+
+def get_image_base64(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode("utf-8")
+
 
 MAX_REQUESTS = 10
 WAIT_TIME = 60 # seconds
@@ -23,7 +28,6 @@ WAIT_TIME = 60 # seconds
 
 def is_user_logged_in():
     return "user" in st.session_state.keys() and len(st.session_state["user"]) > 0
-
 
 
 def make_hashes(password):
@@ -39,8 +43,6 @@ def get_json(filename):
 def store_data_as_json(file_name, data):
     with open(file_name, 'w') as file:
         json.dump(data, file)
-
-
 
 
 def chat_page_styling():
@@ -118,82 +120,6 @@ def get_user_message(typeOfChat):
     return prompt
 
 
-def chat_page():
-    chat_page_styling()
-
-    reproduce_chat_if_user_logged_in("messages")
-
-    start_new_chat_if_empty("messages")
-
-    print_current_chat("messages")
-    
-    if st.session_state.lock_until > time.time():
-        st.write(f"You have reached your limit of {MAX_REQUESTS} questions. Please wait {int(st.session_state.lock_until - time.time())} seconds.")
-        st.session_state.request_count = 0
-        return
-    
-    st.session_state.request_count += 1  
-
-    if st.session_state.request_count > MAX_REQUESTS:
-        st.session_state.lock_until = time.time() + WAIT_TIME  
-        
-    index = load_index_from_db(st.session_state["knowledgebase"])
-
-    prompt = get_user_message("messages")
-
-    # produce response
-    if prompt:
-        with st.container():
-            user_message(prompt)
-            botmsg = bot_message("...", bot_name="DrugRepoChatter")
-
-        try:
-            # add context of the knowledge base to the messages
-            docs = index.similarity_search(prompt)
-            doc = docs[0].page_content
-            prompt_template = 'The given information is: {document_data}'
-            prompt_template = prompt_template.format(document_data=doc)
-            context = {"role": "system", "content": prompt_template}
-            save_message_in_db("messages", context)
-            st.session_state["messages"].append(context)
-        except Exception as e:
-            # st.write(e)
-            st.error(
-                "An error occured with the chosen knowledge base. The knowledge base could not be used in the following response.")
-
-        response = []
-        result = ""
-        try:
-            for chunk in ollama_llm:
-                text = chunk.choices[0].get("delta", {}).get("content")
-                if text is not None:
-                    response.append(text)
-                    result = "".join(response).strip()
-
-                    botmsg.update(result)
-            message = {"role": "assistant", "content": result}
-            st.session_state["messages"].append(message)
-            if is_user_logged_in():
-                save_message_in_db("messages", message)
-
-        except Exception as e:
-            st.write(e)
-            st.error("Something went wrong while producing a response.")
-        else:
-            failure_message = """
-            Hi there. You haven't provided me with a correct LLM endpoint that I can use. 
-            Please provide one, so we can start chatting!
-            """
-            message = {"role": "assistant", "content": failure_message}
-            st.session_state["messages"].append(message)
-            botmsg.update(failure_message)
-            if is_user_logged_in():
-                save_message_in_db("messages", message)
-
-    if len(st.session_state["messages"]) != 0 and st.button("Clear Chat"):
-        clear_chat("messages")
-
-
 def config_page():
     st.title("Configure knowledge base")
     if not is_user_logged_in():
@@ -203,7 +129,7 @@ def config_page():
         indices = []
         public_knowledgebase = get_public_knowledgebase()
         for knowledgebase in public_knowledgebase:
-            indices.append("index_" + knowledgebase[1])
+            indices.append(knowledgebase[1])
         if is_user_logged_in():
             private_knowledgebases = get_private_knowledgebase(st.session_state["user"])
             for knowledgebase in private_knowledgebases:
@@ -266,6 +192,7 @@ def config_page():
             # Only delete the files if the index is not protected
             if not check_if_public_knowledgebase_protected(base_name):
                 folder = f"indexes/{st.session_state['knowledgebase']}"
+                # folder = f"indexes/index_repo4euD21openaccess"
                 # Delete the files
                 import shutil
                 if os.path.exists(folder):
@@ -296,7 +223,8 @@ def process_llm_response(llm_response, doc_content=True):
 
 
 def qanda_page():
-    chaintype = st.selectbox("Please select chain type", options=['stuff', "map_reduce", "refine"], index=0)
+    chaintype="stuff"
+    chaintype = st.selectbox("Please select chain type", options=['stuff', "map_reduce", "refine"] ,index=0)
     default_k = 4
     selected_k = st.slider("k", min_value=1, max_value=50, value=default_k, step=1)
     default_fetch_k = 20
@@ -307,8 +235,12 @@ def qanda_page():
     st.header("Questions and Answering with sources")
 
     if "knowledgebase" in st.session_state.keys() and len(st.session_state["knowledgebase"]) > 0:
+        # index = load_index_from_db( "index_repo4euD21openaccess")
         index = load_index_from_db(st.session_state["knowledgebase"])
-
+        if index is not None:
+            st.write("Index loaded successfully")
+        else:
+            st.write("Failed to load the index")
 
     else:
         st.info("No knowledge base found. Please configure one!")
@@ -317,7 +249,6 @@ def qanda_page():
     reproduce_chat_if_user_logged_in("messagesqanda")
     start_new_chat_if_empty("messagesqanda")
     print_current_chat("messagesqanda")
-    
      
     if st.session_state.lock_until_qanda > time.time():
         st.write(f"You have reached your limit of {MAX_REQUESTS} questions. Please wait {int(st.session_state.lock_until_qanda - time.time())} seconds.")
@@ -379,26 +310,22 @@ def qanda_page():
         clear_chat("messagesqanda")
 
 
-def visualize_index_page():
-    st.markdown(
-        f'<p align="center"> <img src="https://github.com/fmdelgado/drugrepochat/blob/fix-bugs-db-update/app/img/logo.png" width="300"/> </p>',
-        unsafe_allow_html=True,
-    )
-    st.title("DrugRepoChatter")
-    st.header("AI-powered assistant for academic research")
-
-    st.markdown("""
-    ### Under Construction 🚧
-
-    This page is currently under construction. We're working hard to provide you with a seamless and efficient experience.
-
-    Stay tuned for updates and thank you for your patience!
-    """)
-
-
 def about_page():
+    # Define the paths to the images
+    image_dir = "/app/img"
+    image_cosybio = os.path.join(image_dir, "logo_cosybio.png")
+    image_repo4eu = os.path.join(image_dir, "REPO4EU-logo-main.png")
+    image_eu_funded = os.path.join(image_dir, "eu_funded_logo.jpeg")
+    image_logo = os.path.join(image_dir, "logo.png")
+
+    # Convert images to base64
+    cosybio_base64 = get_image_base64(image_cosybio)
+    repo4eu_base64 = get_image_base64(image_repo4eu)
+    eu_funded_base64 = get_image_base64(image_eu_funded)
+    logo_base64 = get_image_base64(image_logo)
+
     st.markdown(
-        f'<p align="center"> <img src="img/logo.png" width="300"/> </p>',
+        f'<p align="center"> <img src="data:image/png;base64,{logo_base64}" width="300"/> </p>',
         unsafe_allow_html=True,
     )
     st.title("DrugRepoChatter")
@@ -407,18 +334,20 @@ def about_page():
     st.markdown("""
     DrugRepoChatter is an AI-powered assistant for academic research. It is a tool that helps researchers to find relevant information in a large corpus of scientific documents.
     To begin, just upload your PDF files and DrugRepoChatter will create a knowledge base that you can query using natural language. 
-        """)
+    """)
 
+    # Display images using HTML
     st.markdown(
         f'''
-         <div style="text-align:center">
-             <img src="https://github.com/fmdelgado/DRACOONpy/raw/master/img/logo_cosybio.png" width="100" style="margin:0px 15px 0px 15px;"/>
-             <img src="https://github.com/fmdelgado/DRACOONpy/raw/master/img/REPO4EU-logo-main.png" width="120" style="margin:0px 15px 0px 15px;"/>
-             <img src="https://github.com/fmdelgado/DRACOONpy/raw/master/img/eu_funded_logo.jpeg" width="120" style="margin:0px 15px 0px 15px;"/>
-         </div>
-         ''',
+        <div style="text-align:center">
+            <img src="data:image/png;base64,{cosybio_base64}" width="100" style="margin:0px 15px 0px 15px;"/>
+            <img src="data:image/png;base64,{repo4eu_base64}" width="120" style="margin:0px 15px 0px 15px;"/>
+            <img src="data:image/png;base64,{eu_funded_base64}" width="120" style="margin:0px 15px 0px 15px;"/>
+        </div>
+        ''',
         unsafe_allow_html=True,
     )
+
     # Displaying the funding information
     st.markdown("""
     ---
@@ -426,7 +355,6 @@ def about_page():
 
     This project is funded by the European Union under grant agreement No. 101057619. Views and opinions expressed are however those of the author(s) only and do not necessarily reflect those of the European Union or European Health and Digital Executive Agency (HADEA). Neither the European Union nor the granting authority can be held responsible for them. This work was also partly supported by the Swiss State Secretariat for Education, Research and Innovation (SERI) under contract No. 22.00115.
     """)
-
 
 def sign_up():
     st.subheader("Create an Account")
@@ -506,26 +434,25 @@ def main():
             st.session_state.lock_until_qanda = 0
     if "knowledgebase" not in st.session_state.keys():
         # default knowledge base
-        st.session_state["knowledgebase"] = "index_repo4euD21openaccess"
+        # default_db_name =  "index_repo4euD21openaccess"
+        st.session_state["knowledgebase"] = "repo4euD21openaccess"
 
     with st.sidebar:
-        page = option_menu("Choose a page", ["Login", "Sign up", "Chatbot", "Q&A", "Configure knowledge base", "About"])
+        page = option_menu("Choose a page", ["Login", "Sign up", "Q&A", "Configure knowledge base", "About"])
         if st.button("logout"):
             logout()
-    if page == "Chatbot":
-        chat_page()
+
+    if page == "Sign up":
+        sign_up()
+    elif page == "Login":
+        login()
     elif page == "Configure knowledge base":
         config_page()
     elif page == "Q&A":
         qanda_page()
-    elif page == "Visualize index":
-        visualize_index_page()
     elif page == "About":
         about_page()
-    elif page == "Sign up":
-        sign_up()
-    elif page == "Login":
-        login()
+
 
 
 if __name__ == "__main__":

@@ -15,7 +15,6 @@ from ollama_connector import ollama_embeddings
 # where to  import user/password asnd so on? to connect ot the ur?
 
 
-
 def parse_pdf(file: BytesIO) -> List[str]:
     pdf = PdfReader(file)
     output = []
@@ -66,9 +65,9 @@ def text_to_docs(text: str, filename: str) -> List[Document]:
 def get_index_for_pdf(pdf_files):
     documents = []
     for pdf_file in pdf_files:
-        text = parse_pdf(BytesIO(pdf_file.getvalue()))  # Extract text from the pdf
+        pdf_text = parse_pdf(BytesIO(pdf_file.getvalue()))  # Extract text from the pdf
         filename = pdf_file.name  # Get the filename
-        documents = documents + text_to_docs(text, filename)  # Divide the text up into chunks
+        documents = documents + text_to_docs(pdf_text, filename)  # Divide the text up into chunks
 
     index = FAISS.from_documents(documents, ollama_embeddings)
     return index
@@ -76,7 +75,6 @@ def get_index_for_pdf(pdf_files):
 
 def store_index_in_db(index, name):
     index.save_local(f"indexes/{name}")
-
 
 def load_index_from_db(index_name):
     index = FAISS.load_local(f"indexes/{index_name}", ollama_embeddings, allow_dangerous_deserialization=True)

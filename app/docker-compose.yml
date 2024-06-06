@@ -4,25 +4,25 @@ services:
   app:
     image: drugrepochat
     container_name: drugrepochat
-    links:
-      - "db"
     build: .
     env_file:
       - .env
     ports:
-      - ${port_mapping}
+      - "${port_mapping}"
     depends_on:
       - db
     volumes:
       - index_volume:/app/indexes
-
+      - .:/app  # Ensure the current directory is correctly mounted
 
   db:
     container_name: drugrepochatdb
-    platform: linux/x86_64
+    platform: linux/x86_64  # Specify platform for emulation
     image: mysql:5.7
     environment:
-      MYSQL_ROOT_PASSWORD: ${root_pw}
+      MYSQL_ROOT_PASSWORD: "${root_pw}"
+    ports:
+      - "3306:3306"
 
 volumes:
   index_volume:
