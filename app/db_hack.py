@@ -62,10 +62,7 @@ def chat_page_styling():
 def reproduce_chat_if_user_logged_in(typeOfMessage):
     # reproduce chat if user is logged in from DB
     if is_user_logged_in():
-        if typeOfMessage == "messages":
-            messages = get_chatdata(st.session_state["user"])
-            st.session_state[typeOfMessage] = []
-        elif typeOfMessage == "messagesqanda":
+        if typeOfMessage == "messagesqanda":
             messages = get_qandadata(st.session_state["user"])
             st.session_state[typeOfMessage] = []
         for message in messages:
@@ -97,17 +94,13 @@ def clear_chat(typeOfChat):
     # clear chat data
     st.session_state[typeOfChat] = []
     # delete chat in DB as well
-    if typeOfChat == "messages":
-        delete_chat(st.session_state["user"])
-    elif typeOfChat == "messagesqanda":
+    if typeOfChat == "messagesqanda":
         delete_qanda(st.session_state["user"])
     st.experimental_rerun()
 
 
 def save_message_in_db(typeOfChat, message):
-    if typeOfChat == "messages":
-        add_chatdata(st.session_state["user"], message["content"], message["role"])
-    elif typeOfChat == "messagesqanda":
+    if typeOfChat == "messagesqanda":
         add_qandadata(st.session_state["user"], message["content"], message["role"])
 
 
@@ -123,7 +116,8 @@ def get_user_message(typeOfChat):
 def config_page():
     st.title("Configure knowledge base")
     if not is_user_logged_in():
-        st.warning("You are not logged in. Newly created knowledge bases will be available for everyone.")
+        st.warning("You are not logged in. Please login or create a new account to configure a knowledge base.")
+        return
 
     try:
         indices = []
@@ -375,7 +369,7 @@ def sign_up():
     if st.button('SignUp'):
         # user does not exist yet and can be created
         if check_if_user_already_exists(st.session_state["user"]):
-            add_userdata(st.session_state["user"], st.session_state["password"], st.session_state["key"])
+            add_userdata(st.session_state["user"], st.session_state["password"])
             st.success("You have successfully created an account. You are already logged in.")
         # user already exists
         else:
@@ -395,7 +389,6 @@ def login():
     if result:
         user = st.session_state["user"]
         st.success("Logged In as {}".format(user))
-        st.session_state["key"] = result[0][2]
 
     # Login failed
     elif "user" in st.session_state.keys() and "password" in st.session_state.keys() and len(
@@ -406,8 +399,6 @@ def login():
 def logout():
     st.session_state["user"] = ""
     st.session_state["password"] = ""
-    st.session_state["key"] = ""
-    st.session_state["messages"] = []
     st.session_state["messagesqanda"] = []
 
 
@@ -415,19 +406,12 @@ def main():
     if "messages" not in st.session_state.keys() and "messagesqanda" not in st.session_state.keys():
         st.session_state["user"] = ""
         st.session_state["password"] = ""
-        st.session_state["key"] = ""
-        st.session_state["messages"] = []
         st.session_state["messagesqanda"] = []
 
         create_usertable()
-        create_chattable()
         create_qandatable()
         create_knowledgebases_private()
         create_knowledgebases_public()
-        if 'request_count' not in st.session_state:
-            st.session_state.request_count = 0
-        if 'lock_until' not in st.session_state:
-            st.session_state.lock_until = 0
         if 'request_count_qanda' not in st.session_state:
             st.session_state.request_count_qanda = 0
         if 'lock_until_qanda' not in st.session_state:
@@ -435,7 +419,7 @@ def main():
     if "knowledgebase" not in st.session_state.keys():
         # default knowledge base
         # default_db_name =  "index_repo4euD21openaccess"
-        st.session_state["knowledgebase"] = "repo4euD21openaccess"
+        st.session_state["knowledgebase"] = "index_repo4euD21openaccess"
 
     with st.sidebar:
         page = option_menu("Choose a page", ["Login", "Sign up", "Q&A", "Configure knowledge base", "About"])

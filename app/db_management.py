@@ -24,13 +24,7 @@ c = conn.cursor(buffered=True)
 
 # create tables
 def create_usertable():
-    c.execute('CREATE TABLE IF NOT EXISTS userstable(user VARCHAR(100) PRIMARY KEY,password TEXT, apikey VARCHAR(100));')
-
-
-
-def create_chattable():
-    c.execute(
-        'CREATE TABLE IF NOT EXISTS chattable(rowid INTEGER auto_increment PRIMARY KEY,user VARCHAR(100), message TEXT, role VARCHAR(100), FOREIGN KEY (user) REFERENCES userstable(user));')
+    c.execute('CREATE TABLE IF NOT EXISTS userstable(user VARCHAR(100) PRIMARY KEY,password TEXT);')
 
 
 def create_qandatable():
@@ -48,13 +42,6 @@ def create_knowledgebases_public():
     if check_if_public_knowledgebase_already_exists("index_repo4euD21openaccess"):
         add_public_knowledgebase("index_repo4euD21openaccess", True)
 
-
-def delete_chat(user):
-    c.execute('DELETE FROM chattable WHERE user = %s;', [user])
-    conn.commit()
-
-
-
 def delete_qanda(user):
     c.execute('DELETE FROM qandatable WHERE user = %s;', [user])
     conn.commit()
@@ -66,9 +53,6 @@ def delete_private_knowledgebase(user, knowledgebase):
 def delete_public_knowledgebase(knowledgebase):
     c.execute('DELETE FROM knowledgebases_public WHERE knowledgebase = %s;', [knowledgebase])
     conn.commit()
-def add_chatdata(username, message, role):
-    c.execute('INSERT INTO chattable(user,message, role) VALUES (%s, %s, %s);', (username, message, role))
-    conn.commit()
 
 
 def add_qandadata(username, message, role):
@@ -76,8 +60,8 @@ def add_qandadata(username, message, role):
     conn.commit()
 
 
-def add_userdata(username, password, key):
-    c.execute('INSERT INTO userstable(user,password, apikey) VALUES (%s, %s, %s);', (username, password, key))
+def add_userdata(username, password):
+    c.execute('INSERT INTO userstable(user,password) VALUES (%s, %s);', (username, password))
     conn.commit()
 
 def add_private_knowledgebase(username, knowledgebase):
@@ -98,12 +82,6 @@ def get_public_knowledgebase():
     data = c.fetchall()
     return data
 
-def get_chatdata(username):
-    c.execute('SELECT * FROM chattable WHERE user = %s;', [username])
-    data = c.fetchall()
-    return data
-
-
 
 def get_qandadata(username):
     c.execute('SELECT * FROM qandatable WHERE user = %s;', [username])
@@ -115,11 +93,6 @@ def get_user_data(username):
     c.execute('SELECT * FROM userstable WHERE user = %s;', [username])
     data = c.fetchall()
     return data
-
-
-def update_key(key, user):
-    c.execute('UPDATE userstable SET apikey = %s WHERE user = %s;', (key, user))
-    conn.commit()
 
 
 def check_if_user_already_exists(username):
