@@ -12,7 +12,7 @@ services:
     depends_on:
       - db
     volumes:
-      - index_volume:/app/indexes
+      - ./indexes:/app/indexes  # Synchronize with the 'indexes' directory in your repo
       - .:/app  # Ensure the current directory is correctly mounted
 
   db:

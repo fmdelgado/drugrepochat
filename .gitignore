@@ -6,3 +6,5 @@ app/.env
 .DS_Store
 app/.DS_Store
 /data/
+app/indexes/
+app/__pycache__/
